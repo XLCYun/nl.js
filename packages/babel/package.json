@@ -1,0 +1,33 @@
+{
+  "name": "@nljs/babel",
+  "version": "0.0.1",
+  "description": "Babel plugin for nl.js.",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XLCYun/nl.js.git"
+  },
+  "keywords": [
+    "nljs",
+    "babel-plugin"
+  ],
+  "author": "XLCYun",
+  "peerDependencies": {
+    "@babel/core": "^7.0.0"
+  },
+  "dependencies": {
+    "@babel/template": "^7.23.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "jest": "^29.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/XLCYun/nl.js/issues"
+  },
+  "homepage": "https://github.com/XLCYun/nl.js#readme",
+  "private": true
+}
