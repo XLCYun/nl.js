@@ -9,6 +9,11 @@ async function main() {
   const args = nl`base on the command and argsDescription, what args should be passed to the command, give me a string`;
 
   nl`print the command and args`;
+  const confirmed = nl`confirm from user to run the command and args, return true if confirmed`;
+  if(confirmed === true) {
+    nl`run the command and args`;
+  }
+
   return 0;
 }
 

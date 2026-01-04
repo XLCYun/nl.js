@@ -1,31 +1,30 @@
 
-async function isSafe(chessboard, row, column) {  
-  const isSafe = nl`check if the position (row, column) is safe for the queen`;
-  console.log("isSafe:", isSafe, "row:", row, "column:", column);
-  return isSafe;
-}
-
-async function isDeadEnd(chessboard, row) {
-  return nl`check if there is no safe position for the queen in the row, if so, return true`;
+async function isSafe(chessboard, row, column) {
+  return nl`check if the position (row, column) is safe for the queen`;
 }
 
 async function solve(chessboard, row) {
-  for(let i = 0; i < 8; i++) {
-    if(await isSafe(chessboard, row, i)) {
-      console.log("-------------- Placed queen at (row, i)", row, i);
-      chessboard[row][i] = 1;
-      if(row === 7) {
-        console.log("Found a solution!");
-        nl`print the chessboard`
-        return true
-      }
-      const result = await solve(chessboard, row + 1);
-      if(result) {
-        return true;
-      }
-      chessboard[row][i] = 0;
-      console.log("-------------- Unplaced queen at (row, i)", row, i);
+  for (let col = 0; col < 8; col++) {
+    const isSafeToPlace = nl`check if the position (row, column) is safe for the queen`;
+    if (!isSafeToPlace) {
+      continue;
     }
+
+    nl`place the queen at (row, col)`;
+
+    if (nl`is last row`) {
+      nl`print Found a solution!`;
+      nl`print the chessboard, use Q to represent the queen and . to represent the empty space`
+      return true
+    }
+
+    // go to next row
+    const result = await solve(chessboard, row + 1);
+    if (result) {
+      return true;
+    }
+
+    nl`remove the queen from (row, col)`;
   }
 }
 

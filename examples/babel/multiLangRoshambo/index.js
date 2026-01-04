@@ -3,7 +3,7 @@
 async function main() {
   const arg = nl`first argument of the process command line`;
   const userChoice = nl`get the user's choice from the command line argument`;
-  const computerChoice = nl`according userChoice, generate a choice that will win the user`;
+  const computerChoice = nl`according userChoice, generate a choice that will win the user using the same language`;
 
   nl`print the computer's choice`;
 
