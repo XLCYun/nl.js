@@ -1,5 +1,5 @@
 {
-  "name": "nljs-babel-examples-hello-world",
+  "name": "nljs-babel-examples-nlarg",
   "version": "0.0.1",
   "scripts": {
     "build": "babel index.js --out-dir lib"

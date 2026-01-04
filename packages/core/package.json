@@ -1,0 +1,26 @@
+{
+  "name": "@nljs/core",
+  "version": "0.0.1",
+  "description": "Core package of nljs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XLCYun/nl.js.git"
+  },
+  "keywords": [
+    "nljs"
+  ],
+  "author": "XLCYun",
+  "license": "SEE LICENSE IN license",
+  "bugs": {
+    "url": "https://github.com/XLCYun/nl.js/issues"
+  },
+  "homepage": "https://github.com/XLCYun/nl.js#readme",
+  "private": true,
+  "dependencies": {
+    "openai": "^6.1.0"
+  }
+}

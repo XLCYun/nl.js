@@ -1,5 +1,5 @@
+
 async function main() {
-  nl`print hello world`;
 }
 
 main();

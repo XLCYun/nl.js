@@ -9,7 +9,7 @@ module.exports = function ({ types: t }) {
     syntacticPlaceholders: true
   })
   const buildEval = template(
-    `eval(__NLJS_CORE.generate({ global: __NLJS_GLOBAL, source: { code: __NLJS_GLOBAL.sourceCode, start: %%start%%, end: %%end%% } }))`,
+    `eval(await __NLJS_CORE.generate({ global: __NLJS_GLOBAL, source: { code: __NLJS_GLOBAL.sourceCode, start: %%start%%, end: %%end%% } }))`,
     { syntacticPlaceholders: true }
   )
 
