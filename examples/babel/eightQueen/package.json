@@ -1,0 +1,16 @@
+{
+  "name": "nljs-babel-examples-eight-queen",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "babel index.js --out-dir lib"
+  },
+  "dependencies": {
+    "@nljs/core": "file:../../../packages/core"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.23.0",
+    "@babel/core": "^7.23.0"
+  },
+  "private": true
+}
+

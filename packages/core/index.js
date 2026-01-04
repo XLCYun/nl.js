@@ -11,16 +11,17 @@ function extractContext(code, start, end) {
   // 提取自然语言块的内容
   const nlBlock = code.substring(start, end);
   
-  // 提取自然语言块前后的上下文代码（各提取一定范围的代码）
-  const contextBefore = code.substring(Math.max(0, start - 500), start);
-  const contextAfter = code.substring(end, Math.min(code.length, end + 500));
+  // 提取自然语言块前后的上下文代码
+  // 暂时不限制上下文代码的长度
+  const contextBefore = code.substring(0, start);
+  const contextAfter = code.substring(end, code.length);
   
   return {
     before: contextBefore,
     nlBlock: nlBlock,
     after: contextAfter,
     fullContext: `${contextBefore}${nlBlock}${contextAfter}`,
-    maskContext: `${contextBefore}<nl></nl>${contextAfter}`
+    maskContext: `${contextBefore}(async function () {<nl></nl>})()${contextAfter}`
   };
 }
 
@@ -73,13 +74,14 @@ ${JSON.stringify(scope)}
 在上下文代码中，<nl></nl> 标签内应该是一段生成的 JavaScript 代码，该代码的功能描述为：
 ${context.nlBlock}
 
-请根据代码功能描述，以及当前运行时的作用域变量及其取值，生成对应的 JavaScript 同步执行的代码。
+请根据代码功能描述，以及当前运行时的作用域变量及其取值，生成对应的 JavaScript 代码。
 
-根据情况，直接返回 true, false, number, string 等基本类型值也是允许的。
+请注意：
+1. 根据情况，直接返回 true, false, number, string 等基本类型值是允许的。
+2. 生成的代码**必需**用 <nl></nl> 标签包裹起来。
+`;
 
-生成的代码也**必需**用 <nl></nl> 标签包裹起来。`;
-
-  console.log('prompt', prompt);
+  // console.log('prompt', prompt);
 
   // 初始化 OpenAI 客户端
   // 注意：需要从环境变量中获取 API Key
@@ -107,10 +109,11 @@ ${context.nlBlock}
 
     // 获取响应内容
     const responseContent = completion.choices[0]?.message?.content || '';
-    console.log('responseContent', responseContent);
+    // console.log('responseContent', responseContent);
     
     // 解析并返回代码
-    return parseNlCode(responseContent);
+    const nlCode = parseNlCode(responseContent);
+    return `(async function () {${nlCode}})()`;
   } catch (error) {
     console.error('OpenAI API 调用失败:', error);
     throw new Error(`代码生成失败: ${error.message}`);
