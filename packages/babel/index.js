@@ -1,5 +1,6 @@
 const template = require("@babel/template").default
 const { checkProgramVar } = require("./helpers/checkProgramVar")
+const { gatherScopeVars } = require("./helpers/gatherScopeVars")
 
 module.exports = function ({ types: t }) {
   const buildRequireCore = template('var __NLJS_CORE = require("@nljs/core")', {
@@ -9,7 +10,7 @@ module.exports = function ({ types: t }) {
     syntacticPlaceholders: true
   })
   const buildEval = template(
-    `eval(await __NLJS_CORE.generate({ global: __NLJS_GLOBAL, source: { code: __NLJS_GLOBAL.sourceCode, start: %%start%%, end: %%end%% } }))`,
+    `eval(await __NLJS_CORE.generate({ global: __NLJS_GLOBAL, scope: %%scope%%, source: { code: __NLJS_GLOBAL.sourceCode, start: %%start%%, end: %%end%% } }))`,
     { syntacticPlaceholders: true }
   )
 
@@ -57,6 +58,7 @@ module.exports = function ({ types: t }) {
         if (t.isIdentifier(path.node.tag, { name: "nl" })) {
           // Convert to eval( ... )
           path.replaceWith(buildEval({ 
+            scope: gatherScopeVars(t, path),
             start: t.numericLiteral(path.node.start), 
             end: t.numericLiteral(path.node.end) 
           }))

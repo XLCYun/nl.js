@@ -19,7 +19,8 @@ function extractContext(code, start, end) {
     before: contextBefore,
     nlBlock: nlBlock,
     after: contextAfter,
-    fullContext: `${contextBefore}${nlBlock}${contextAfter}`
+    fullContext: `${contextBefore}${nlBlock}${contextAfter}`,
+    maskContext: `${contextBefore}<nl></nl>${contextAfter}`
   };
 }
 
@@ -43,13 +44,14 @@ function parseNlCode(response) {
  * 生成代码
  * @param {Object} params - 参数对象
  * @param {Object} params.global - 全局对象，包含 sourceCode
+ * @param {Object} params.scope - 作用域对象，包含变量名和值
  * @param {Object} params.source - 源代码信息
  * @param {string} params.source.code - 源代码
  * @param {number} params.source.start - 自然语言块起始位置
  * @param {number} params.source.end - 自然语言块结束位置
  * @returns {Promise<string>} 生成的代码字符串
  */
-async function generate({ global, source }) {
+async function generate({ global, scope, source }) {
   const { code, start, end } = source;
   
   // 提取上下文
@@ -60,25 +62,36 @@ async function generate({ global, source }) {
 
 上下文代码：
 \`\`\`javascript
-${context.fullContext}
+${context.maskContext}
 \`\`\`
 
-自然语言块位置：第 ${start} 到 ${end} 个字符
-自然语言块内容：${context.nlBlock}
+当前的作用域变量及其取值如下：
+\`\`\`json
+${JSON.stringify(scope)}
+\`\`\`
 
-请根据自然语言块的描述，生成对应的 JavaScript 代码。请将生成的代码用 <nl></nl> 标签包裹起来。`;
+在上下文代码中，<nl></nl> 标签内应该是一段生成的 JavaScript 代码，该代码的功能描述为：
+${context.nlBlock}
+
+请根据代码功能描述，以及当前运行时的作用域变量及其取值，生成对应的 JavaScript 同步执行的代码。
+
+根据情况，直接返回 true, false, number, string 等基本类型值也是允许的。
+
+生成的代码也**必需**用 <nl></nl> 标签包裹起来。`;
+
+  console.log('prompt', prompt);
 
   // 初始化 OpenAI 客户端
   // 注意：需要从环境变量中获取 API Key
   const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || global?.openaiApiKey,
-    baseURL: process.env.OPENAI_BASE_URL || global?.openaiBaseURL
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL
   });
 
   try {
     // 调用 OpenAI API
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || global?.openaiModel || 'gpt-5.2',
+      model: process.env.OPENAI_MODEL || 'gpt-5.2',
       messages: [
         {
           role: 'system',
