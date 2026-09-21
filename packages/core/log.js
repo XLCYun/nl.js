@@ -8,6 +8,13 @@ function debug(...args) {
     }
 }
 
+function debugJson(label, value) {
+    if (DEBUG) {
+        console.debug(label, JSON.stringify(value, null, 2));
+    }
+}
+
 module.exports = {
-    debug
+    debug,
+    debugJson
 };

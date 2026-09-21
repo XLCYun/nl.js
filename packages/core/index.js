@@ -2,6 +2,7 @@ const OpenAI = require('openai');
 const { Context } = require('./context');
 const { Cache } = require('./cache');
 const { debug } = require('./log');
+const { judgeWithJev } = require('./jev');
 
 const codeCache = new Cache();
 
@@ -22,7 +23,7 @@ function parseNlCode(response) {
 }
 
 /**
- * 生成代码
+ * 生成代码，或在 Jev 模式下返回布尔常量表达式
  * @param {Object} params - 参数对象
  * @param {Object} params.global - 全局对象，包含 sourceCode
  * @param {Object} params.scope - 作用域对象，包含变量名和值
@@ -33,6 +34,16 @@ function parseNlCode(response) {
  * @returns {Promise<string>} 生成的代码字符串
  */
 async function generate({ global, scope, source }) {
+  const provider = process.env.NLJS_PROVIDER || 'openai';
+  if (provider === 'jev') {
+    // Jev evaluates the current state, so its answers must bypass the code cache.
+    const value = await judgeWithJev({ global, scope, source });
+    return value ? 'true' : 'false';
+  }
+  if (provider !== 'openai') {
+    throw new Error(`不支持的 NLJS_PROVIDER: ${provider}，可选值为 openai 或 jev`);
+  }
+
   const cachedCode = codeCache.get({ code: source.code, start: source.start, end: source.end });
   if (cachedCode) {
     debug('cached code found', cachedCode);
@@ -50,7 +61,7 @@ async function generate({ global, scope, source }) {
   try {
     // 调用 OpenAI API
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-5.2',
+      model: process.env.OPENAI_MODEL || 'deepseek-v4-pro-0813',
       messages: [
         {
           role: 'system',
@@ -61,7 +72,7 @@ async function generate({ global, scope, source }) {
           content: prompt
         }
       ],
-      temperature: 0.7,
+      temperature: 0,
     });
     debug('prompt:', prompt);
 
@@ -85,4 +96,3 @@ module.exports = {
   generate,
   disableCodeCache: () => codeCache.disable()
 };
-

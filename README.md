@@ -12,7 +12,7 @@ async function main() {
 main();
 ```
 
-项目包含 Babel 插件、运行时和命令行示例。Babel 负责转换 `nl` 模板标签，运行时通过 OpenAI 兼容的 Chat Completions 接口生成 JavaScript，再在调用位置执行。
+项目包含 Babel 插件、运行时和命令行示例。Babel 负责转换 `nl` 模板标签，运行时默认通过 OpenAI 兼容的 Chat Completions 接口生成 JavaScript，再在调用位置执行。设置 `NLJS_PROVIDER=jev` 后，`nl` 片段改为通过 TypeSafe 的 Jev 模型判断条件，返回布尔值。
 
 ## 快速开始
 
@@ -68,12 +68,16 @@ Hello, World!
 
 | 变量 | 用途 | 未设置时的行为 |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | 模型服务的 API Key | 创建客户端时失败 |
+| `NLJS_PROVIDER` | `openai` 生成代码，`jev` 判断条件 | `openai` |
+| `OPENAI_API_KEY` | OpenAI 兼容服务的 API Key | 使用 `openai` 时创建客户端失败 |
 | `OPENAI_BASE_URL` | OpenAI 兼容接口的基础地址 | SDK 使用 `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | 请求的模型名称 | 使用 [运行时源码](packages/core/index.js) 中的默认模型 |
+| `TYPESAFE_API_KEY` | TypeSafe API Key | 使用 `jev` 时创建客户端失败 |
+| `TYPESAFE_BASE_URL` | TypeSafe API 根地址，不包含 `/v1` | `https://api.typesafe.ai` |
+| `TYPESAFE_DEFAULT_MODEL` | Jev 模型名称 | `jev-latest` |
 | `DEBUG` | 输出调试日志 | 关闭；只有字符串 `true` 会开启 |
 
-默认接口地址和默认模型名称分别来自 SDK 和本项目。请显式设置 `OPENAI_BASE_URL`、`OPENAI_MODEL`，确保它们属于同一个服务且模型支持 Chat Completions。
+使用 `openai` 模式时，默认接口地址和默认模型名称分别来自 SDK 和本项目。请显式设置 `OPENAI_BASE_URL`、`OPENAI_MODEL`，确保它们属于同一个服务且模型支持 Chat Completions。
 
 在示例目录中开启调试：
 
@@ -81,7 +85,7 @@ Hello, World!
 DEBUG=true node lib/index.js
 ```
 
-日志包含 `prompt:`、`response from LLM`、`generated code`。命中代码缓存时会输出 `cached code found`。
+OpenAI 路径的日志包含 `prompt:`、`response from LLM`、`generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率和布尔结果。
 
 项目不会自动加载 `.env`。如果希望通过文件配置，可以在当前示例目录创建 `.env`：
 
@@ -100,6 +104,29 @@ node --env-file=.env lib/index.js
 
 `.env` 路径相对于执行命令的目录；同名变量已经存在于终端环境中时，以终端中的值为准。
 
+### 启用 Jev 布尔判断
+
+需要 Node.js 20 或更新版本，以及已获得访问资格的 TypeSafe 账户。先到 [TypeSafe Console](https://console.typesafe.ai/) 确认访问状态，再从 [API Keys](https://console.typesafe.ai/keys) 创建 key。官方 2026-09-15 公告仍将 Jev 描述为 early access，可能需要等待候补名单放行。[官方开通说明](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
+
+从仓库根目录运行新示例：
+
+```bash
+npm install --prefix packages/core
+npm install --prefix packages/babel
+npm install --prefix examples/babel/jevBoolean
+npm run build --prefix examples/babel/jevBoolean
+
+export TYPESAFE_API_KEY='your-typesafe-api-key'
+export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
+NLJS_PROVIDER=jev node examples/babel/jevBoolean/lib/index.js
+```
+
+示例的判断是 `` const result = nl`1 > 0`; ``，直接打印 Jev 返回概率经阈值转换后的布尔结果，预期输出 `true`。示例源码不包含预期答案断言，也没有提前在本地计算 `1 > 0`。也可以使用示例目录中的 [.env.example](examples/babel/jevBoolean/.env.example) 配置，再运行 `node --env-file=.env lib/index.js`。
+
+此配置对运行进程内的所有 `nl` 片段生效，适用于只做布尔判断的程序。打印、生成字符串、修改变量或询问用户等片段仍应使用 `openai` 模式。Jev 使用独立 SDK 和 `/v1/systemone` 接口，不需要设置 `OPENAI_API_KEY`。[TypeSafe SDK](https://docs.typesafe.ai/sdk/javascript)
+
+Jev Noul 返回条件成立的概率，运行时将 `p > 0.5` 转为 `true`，其余有效概率转为 `false`，恰好 0.5 也为 false。判断每次都会请求模型，不使用代码缓存；请求失败或返回无效概率时抛错，不回退到 OpenAI。这个示例用于检查接入链路，实际语义判断的质量仍需用业务样本评估。[Noul 文档](https://docs.typesafe.ai/primitives/noul)
+
 ## 示例
 
 所有示例都是命令行程序，位于 `examples/babel/`。运行一个新示例时，进入其目录安装依赖并编译。例如，以下命令从仓库根目录运行：
@@ -116,7 +143,9 @@ DEBUG=true node lib/index.js
 | 示例 | 内容 | 运行命令 |
 | --- | --- | --- |
 | [helloWorld](examples/babel/helloWorld) | 用自然语言输出 Hello World | `node lib/index.js` |
+| [jevBoolean](examples/babel/jevBoolean) | 让 Jev 判断 `1 > 0` 并打印布尔结果 | `NLJS_PROVIDER=jev node lib/index.js` |
 | [eightQueen](examples/babel/eightQueen) | 用自然语言描述棋盘操作和判断，递归求解八皇后问题 | `node lib/index.js` |
+| [jevEightQueen](examples/babel/jevEightQueen) | JavaScript 回溯搜索，让 Jev 判断每次落子是否安全 | `NLJS_PROVIDER=jev node lib/index.js` |
 | [asyncSleep](examples/babel/asyncSleep) | 从参数读取秒数，异步等待并逐秒输出 | `node lib/index.js 3` |
 | [computer](examples/babel/computer) | 根据自然语言参数进行数学计算 | `node lib/index.js "计算 123 加 456"` |
 | [multiLangRoshambo](examples/babel/multiLangRoshambo) | 读取石头剪刀布选项，用相同语言输出能获胜的选项 | `node lib/index.js "石头"` |
@@ -144,7 +173,7 @@ Q . . . . . . .
 ## 工作原理
 
 1. **编译**：`@nljs/babel` 找到 `nl` 模板标签，注入 `@nljs/core`，记录原始源码、片段位置和可收集的作用域变量，将标签转换为包含 `await` 的生成与执行调用。
-2. **生成**：运行到该位置时，`@nljs/core` 先检查缓存；未命中时，将源码上下文和作用域变量的 JSON 值发送给模型，要求返回由 `<nl>...</nl>` 包裹的 JavaScript。
+2. **生成或判断**：运行到该位置时，`@nljs/core` 根据 `NLJS_PROVIDER` 选择路径。默认的 OpenAI 路径先检查代码缓存，未命中时请求 `<nl>...</nl>` 包裹的 JavaScript；Jev 路径将片段与当前上下文交给 Noul，按概率返回 `"true"` 或 `"false"` 常量表达式。
 3. **执行**：运行时提取代码，包装为异步函数表达式，并在原调用位置通过 `await eval(...)` 执行。生成代码可以读取调用处的变量，也可以返回值供后续代码使用。
 
 编译本身不调用模型。`lib/index.js` 包含运行时生成代码的调用，模型生成的代码不会写回这个文件。
@@ -175,7 +204,7 @@ main().catch(console.error);
 
 ## 代码缓存
 
-**缓存默认开启**。首次生成代码后，同一个自然语言片段再次执行时会复用生成的代码。
+**OpenAI 代码缓存默认开启**。首次生成代码后，同一个自然语言片段再次执行时会复用生成的代码。Jev 路径始终绕过此缓存，根据当次状态重新请求判断。
 
 | 项目 | 当前行为 |
 | --- | --- |
@@ -253,13 +282,14 @@ examples/
   babel/               各自独立安装、编译和运行的命令行示例
 ```
 
-从仓库根目录运行已有的 Babel 插件测试：
+从仓库根目录运行测试：
 
 ```bash
+npm test --prefix packages/core
 npm test --prefix packages/babel -- --runInBand
 ```
 
-测试覆盖插件转换和作用域变量收集，不调用模型接口。`packages/core` 当前的 `test` 脚本仍是占位命令，尚无可运行的自动化测试。
+测试覆盖插件转换、作用域变量收集、provider 切换、Jev 概率转换、缓存隔离和错误处理。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口。
 
 当前实现的边界：
 

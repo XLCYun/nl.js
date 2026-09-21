@@ -142,3 +142,6 @@ vite.config.ts.timestamp-*
 
 
 **/lib
+
+.agents
+.claude
