@@ -16,6 +16,14 @@ function extractQuestion(nlBlock) {
 
 async function judgeWithJev({ global, scope, source }) {
   try {
+    const configuredThreshold = process.env.NLJS_JEV_THRESHOLD;
+    const inclusive = configuredThreshold !== undefined;
+    const threshold = inclusive ? Number(configuredThreshold) : 0.5;
+    if (configuredThreshold?.trim() === '' || !Number.isFinite(threshold) ||
+        threshold < 0 || threshold > 1) {
+      throw new Error('NLJS_JEV_THRESHOLD 必须是 0 到 1 之间的数值（含端点）');
+    }
+
     const context = new Context({ global, scope, source });
     const { nlBlock, before, after } = context.extractContext();
     const question = extractQuestion(nlBlock);
@@ -46,8 +54,15 @@ async function judgeWithJev({ global, scope, source }) {
       throw new Error('Jev 返回了无效的 Noul 概率');
     }
 
-    const value = probability > 0.5;
-    debug('jev judgment:', { model: response.model, probability, value });
+    // Preserve the original strict cutoff when no threshold is configured.
+    const value = inclusive ? probability >= threshold : probability > threshold;
+    debug('jev judgment:', {
+      model: response.model,
+      probability,
+      threshold,
+      comparison: inclusive ? '>=' : '>',
+      value,
+    });
     return value;
   } catch (error) {
     throw new Error(`Jev 判断失败: ${error.message}`, { cause: error });

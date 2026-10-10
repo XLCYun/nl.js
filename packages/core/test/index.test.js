@@ -3,7 +3,7 @@ const { test, beforeEach, afterEach } = require('node:test');
 const { generate } = require('../index');
 
 const envNames = [
-  'NLJS_PROVIDER', 'TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'TYPESAFE_DEFAULT_MODEL',
+  'NLJS_PROVIDER', 'NLJS_JEV_THRESHOLD', 'TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'TYPESAFE_DEFAULT_MODEL',
   'TYPESAFE_LOG_LEVEL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
 ];
 let savedEnv;
@@ -168,6 +168,52 @@ test('Jev returns the model judgment and applies the threshold, including false 
   assert.equal(requests[0].body.model, 'jev-latest');
 });
 
+test('a configured Jev threshold rejects 0.51 and includes exactly 0.8', async () => {
+  process.env.NLJS_JEV_THRESHOLD = '0.8';
+  const probabilities = [0, 0.51, 0.7999, 0.8, 0.81, 1];
+  const expected = [false, false, false, true, true, true];
+  respondWith(() => jsonResponse(noulResponse(probabilities[requests.length - 1])));
+
+  for (const value of expected) {
+    assert.equal(await generate(input()), String(value));
+  }
+  assert.equal(requests.length, probabilities.length);
+});
+
+test('configured thresholds include the endpoints and an explicit 0.5', async () => {
+  for (const [threshold, probability, expected] of [
+    ['0', 0, true],
+    ['1', 0.9999, false],
+    ['1', 1, true],
+    ['0.5', 0.5, true],
+    [' 0.8 ', 0.8, true],
+  ]) {
+    process.env.NLJS_JEV_THRESHOLD = threshold;
+    respondWith(() => jsonResponse(noulResponse(probability)));
+    assert.equal(await generate(input()), String(expected));
+  }
+});
+
+test('Jev reads threshold changes on each judgment', async () => {
+  respondWith(() => jsonResponse(noulResponse(0.8)));
+  process.env.NLJS_JEV_THRESHOLD = '0.9';
+  assert.equal(await generate(input()), 'false');
+  process.env.NLJS_JEV_THRESHOLD = '0.8';
+  assert.equal(await generate(input()), 'true');
+  delete process.env.NLJS_JEV_THRESHOLD;
+  assert.equal(await generate(input()), 'true');
+  assert.equal(requests.length, 3);
+});
+
+test('invalid Jev thresholds fail before any model request', async () => {
+  respondWith(() => jsonResponse(noulResponse(1)));
+  for (const threshold of ['', '   ', 'abc', '0.8extra', '80%', 'NaN', 'Infinity', '-0.1', '1.1']) {
+    process.env.NLJS_JEV_THRESHOLD = threshold;
+    await assert.rejects(generate(input()), /Jev 判断失败: NLJS_JEV_THRESHOLD/);
+  }
+  assert.equal(requests.length, 0);
+});
+
 test('the same source location is reevaluated when its scope changes', async () => {
   respondWith((request) => jsonResponse(noulResponse(request.body.state.scope.x > 0 ? 0.99 : 0.01)));
 
@@ -178,6 +224,7 @@ test('the same source location is reevaluated when its scope changes', async () 
 
 test('OpenAI stays the default and its cached code cannot bypass an explicit switch to Jev', async () => {
   delete process.env.NLJS_PROVIDER;
+  process.env.NLJS_JEV_THRESHOLD = 'invalid-but-unused-by-openai';
   process.env.OPENAI_API_KEY = 'test-openai-key';
   process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
   process.env.OPENAI_MODEL = 'test-code-model';
@@ -209,6 +256,7 @@ test('OpenAI stays the default and its cached code cannot bypass an explicit swi
   assert.equal(requests[0].body.model, 'test-code-model');
 
   process.env.NLJS_PROVIDER = 'jev';
+  process.env.NLJS_JEV_THRESHOLD = '0.8';
   assert.equal(await eval(await generate(params)), false);
   assert.equal(requests.length, 2);
 

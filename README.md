@@ -76,6 +76,7 @@ Hello, World!
 | 变量 | 用途 | 未设置时的行为 |
 | --- | --- | --- |
 | `NLJS_PROVIDER` | `openai` 生成代码，`jev` 判断条件 | `openai` |
+| `NLJS_JEV_THRESHOLD` | Jev 返回 `true` 的概率下限，范围 `[0, 1]`，配置后按 `p >= 阈值` 判断 | 保留 `p > 0.5` |
 | `OPENAI_API_KEY` | OpenAI 兼容服务的 API Key | 使用 `openai` 时创建客户端失败 |
 | `OPENAI_BASE_URL` | OpenAI 兼容接口的基础地址 | SDK 使用 `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | 请求的模型名称 | 使用 [运行时源码](packages/core/index.js) 中的默认模型 |
@@ -92,7 +93,7 @@ Hello, World!
 DEBUG=true npm start
 ```
 
-OpenAI 路径在请求前输出 `prompt:`，返回后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率和布尔结果。
+OpenAI 路径在请求前输出 `prompt:`，返回后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率、阈值 `threshold`、比较方式 `comparison` 和布尔结果。
 
 所有示例的 `npm start` 都通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
 
@@ -117,6 +118,7 @@ npm install --prefix examples/babel/jevBoolean
 
 export TYPESAFE_API_KEY='your-typesafe-api-key'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
+export NLJS_JEV_THRESHOLD='0.8'
 NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
 ```
 
@@ -124,7 +126,7 @@ NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
 
 此配置对运行进程内的所有 `nl` 片段生效，适用于只做布尔判断的程序。打印、生成字符串、修改变量或询问用户等片段仍应使用 `openai` 模式。Jev 使用独立 SDK 和 `/v1/systemone` 接口，不需要设置 `OPENAI_API_KEY`。[TypeSafe SDK](https://docs.typesafe.ai/sdk/javascript)
 
-Jev Noul 返回条件成立的概率，运行时将 `p > 0.5` 转为 `true`，其余有效概率转为 `false`，恰好 0.5 也为 false。判断每次都会请求模型，不使用代码缓存；请求失败或返回无效概率时抛错，不回退到 OpenAI。这个示例用于检查接入链路，实际语义判断的质量仍需用业务样本评估。[Noul 文档](https://docs.typesafe.ai/primitives/noul)
+Jev Noul 返回条件成立的概率。设置 `NLJS_JEV_THRESHOLD=0.8` 后，运行时将 `p >= 0.8` 转为 `true`，其余有效概率转为 `false`；恰好 0.8 为 true。阈值接受 `[0, 1]` 内的有限数值，空字符串、非数值或越界配置会在请求前报错。未设置该变量时保留原来的 `p > 0.5` 行为，恰好 0.5 为 false；显式设置为 `0.5` 时使用 `p >= 0.5`。配置仅作用于 Jev，在每次判断时读取，不需要重新编译。判断每次都会请求模型，不使用代码缓存；请求失败或返回无效概率时抛错，不回退到 OpenAI。这个示例用于检查接入链路，实际语义判断的质量仍需用业务样本评估。[Noul 文档](https://docs.typesafe.ai/primitives/noul)
 
 ## 示例
 
