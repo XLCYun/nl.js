@@ -6,13 +6,12 @@
 
 ## 安装与运行
 
-需要 Node.js 20+ 和 [TypeSafe API Key](https://console.typesafe.ai/keys)。从仓库根目录安装依赖并编译：
+需要 Node.js 20+ 和 [TypeSafe API Key](https://console.typesafe.ai/keys)。从仓库根目录安装依赖：
 
 ```bash
 npm install --prefix packages/core
 npm install --prefix packages/babel
 npm install --prefix examples/babel/jevEightQueen
-npm run build --prefix examples/babel/jevEightQueen
 ```
 
 通过环境变量开启 Jev 后运行：
@@ -20,24 +19,26 @@ npm run build --prefix examples/babel/jevEightQueen
 ```bash
 export TYPESAFE_API_KEY='your-typesafe-api-key'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
-NLJS_PROVIDER=jev node examples/babel/jevEightQueen/lib/index.js
+NLJS_PROVIDER=jev npm start --prefix examples/babel/jevEightQueen
 ```
 
-也可以进入示例目录，将 `.env.example` 复制为 `.env`，填写 key 后运行：
+也可以进入示例目录，将 `.env.example` 复制为 `.env`（已有文件时直接编辑），填写 key 后运行：
 
 ```bash
 cd examples/babel/jevEightQueen
 cp .env.example .env
 # 编辑 .env，填写 TYPESAFE_API_KEY
-node --env-file=.env lib/index.js
+npm start
 ```
+
+`npm start` 会先编译，再通过 dotenv 加载本目录的 `.env`；终端已导出的同名变量优先。`.env` 已被 Git 忽略，提交时只保留 `.env.example`。
 
 ## 查看每次判断
 
 在示例目录运行：
 
 ```bash
-DEBUG=true node --env-file=.env lib/index.js
+DEBUG=true npm start
 ```
 
 `jev request:` 打印完整请求，包括条件文本、当前棋盘和坐标、完整源码上下文以及判断问题；`jev judgment:` 打印模型版本、概率和布尔结果。
