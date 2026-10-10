@@ -24,9 +24,10 @@ const finalOutputTool = {
 /**
  * 校验一轮回复：可修正的提交抛出 SubmissionError，损坏或中断的回复直接失败。
  * @param {object} completion - Chat Completions 响应
+ * @param {Set<string>} callIds - 本次代码生成会话已收到的工具调用 ID
  * @returns {string} 提交的异步函数体
  */
-function parseFinalOutput(completion) {
+function parseFinalOutput(completion, callIds) {
   if (!Array.isArray(completion?.choices) || !completion.choices[0]) {
     throw new Error('final_output 响应缺少有效的 choice');
   }
@@ -59,12 +60,11 @@ function parseFinalOutput(completion) {
     throw new Error('final_output 响应缺少完整工具调用');
   }
 
-  const ids = new Set();
   for (const call of toolCalls) {
-    if (typeof call?.id !== 'string' || !call.id.trim() || ids.has(call.id)) {
+    if (typeof call?.id !== 'string' || !call.id.trim() || callIds.has(call.id)) {
       throw new Error('final_output 响应中的工具调用 ID 必须非空且互不重复');
     }
-    ids.add(call.id);
+    callIds.add(call.id);
     if (call.type !== 'function' || typeof call.function?.name !== 'string' ||
         !call.function.name) {
       throw new Error('final_output 响应必须包含完整的 function 工具调用');
@@ -98,6 +98,7 @@ function parseFinalOutput(completion) {
 }
 
 async function runCodeGeneration({ openai, model, prompt, maxRounds }) {
+  const callIds = new Set();
   const messages = [
     {
       role: 'system',
@@ -119,7 +120,7 @@ async function runCodeGeneration({ openai, model, prompt, maxRounds }) {
 
     const choice = completion?.choices?.[0];
     try {
-      return parseFinalOutput(completion);
+      return parseFinalOutput(completion, callIds);
     } catch (error) {
       if (!(error instanceof SubmissionError)) throw error;
       if (round === maxRounds) {
