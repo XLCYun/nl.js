@@ -15,6 +15,7 @@ Status: in-progress
 | [01 多轮代码提交与修正](issues/01-generation-loop.md) | 漏调用或提交格式错误后继续对话，有效提交结束，默认最多 10 轮 | None |
 | [02 文件级轮数配置与会话隔离](issues/02-round-configuration.md) | 通过特殊全局对象调整上限，并验证缓存、Jev 与并发会话边界 | 01 |
 | [03 使用说明与协议同步](issues/03-user-documentation.md) | 用户能够按文档配置和理解提醒、修正及终止行为 | 02 |
+| [04 审查问题修复](issues/04-review-fixes.md) | 保留省略 global 的调用兼容性，落实整个会话中的工具 ID 唯一性 | 03 |
 
 ## 跟踪约定
 
@@ -28,6 +29,8 @@ Status: in-progress
 
 - 规格已获实施授权；核心行为、配置入口和失败边界已确定。
 - 各实现工单使用独立分支和 worktree，经合并代理集成；最后从固定基线进行 Standards 与 Spec 两项审查。
+- 01、02、03 已完成并合入。core 70 项、Babel 19 项测试及编译后配置冒烟检查通过；文档链接与示例已验证。
+- Standards 审查 0 项，Spec 审查 1 项，补充兼容性验证 1 项；统一由[工单 04](issues/04-review-fixes.md)修复，见[审查记录](review.md)。
 
 ## Fog
 
