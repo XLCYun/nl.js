@@ -1,6 +1,6 @@
 # 代码生成 Harness 任务图
 
-Status: in-progress
+Status: resolved
 
 集成分支：`codex/code-generation-harness`
 
@@ -29,9 +29,11 @@ Status: in-progress
 
 - 规格已获实施授权；核心行为、配置入口和失败边界已确定。
 - 各实现工单使用独立分支和 worktree，经合并代理集成；最后从固定基线进行 Standards 与 Spec 两项审查。
-- 01、02、03 已完成并合入。core 70 项、Babel 19 项测试及编译后配置冒烟检查通过；文档链接与示例已验证。
-- Standards 审查 0 项，Spec 审查 1 项，补充兼容性验证 1 项；统一由[工单 04](issues/04-review-fixes.md)修复，见[审查记录](review.md)。
-- 04 的两项修复及回归已在工作分支完成，等待集成：core 73 项、Babel 19 项通过；省略 global 保留默认配置，ID 约束覆盖整个会话且不跨会话共享。
+- 01、02、03 分别通过 `59a37c2`、`1d867a3`、`b0d2874` 合入。编译后配置冒烟检查、文档链接与示例均已验证。
+- Standards 审查 0 项，Spec 审查 1 项，补充兼容性验证 1 项；两项问题已统一由[工单 04](issues/04-review-fixes.md)修复，定向复核没有遗留问题，见[审查记录](review.md)。
+- 04 修复提交 `5bcbe2b` 已通过 `f3ac640` 合入，合并树与已测试的实现树一致。最终 core 73 项、Babel 19 项通过；省略 global 保留默认配置，ID 约束覆盖整个会话且不跨会话共享。
+- 全部工单已 resolved；成果保留在集成分支，未推送或合入 main。
+- 四个实现 worktree 均已合入且工作区干净；按 implement-spec 第 9 步尝试逐一归档时，应用均返回 “This worktree is protected by a pinned task or workspace.”，因此保留这些目录。集成 worktree 继续用于查看和后续开发。
 
 ## Fog
 
