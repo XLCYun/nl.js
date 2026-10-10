@@ -60,9 +60,9 @@ class Context {
         请注意：
         1. 只生成异步函数内部的代码，不要包含外层 async function 定义或立即执行包装。需要提供片段结果时使用 return，函数体内允许使用 await。
         2. 生成的代码中，不允许包含 nl\`\` 标签，因为它不是可以直接执行的 JavaScript 代码
-        3. 最后必须且只能调用一次 final_output 工具，将代码放入 asyncFuncBody 字符串字段，例如 {"asyncFuncBody":"return a + b;"}，不要额外嵌套 output 对象。
+        3. 每轮只调用一次 final_output 工具，将代码放入 asyncFuncBody 字符串字段，例如 {"asyncFuncBody":"return a + b;"}，不要额外嵌套 output 对象。
         4. 不要在普通回复正文中提交代码，不要使用 Markdown 代码块或 XML 标签包裹提交的代码。
-        5. final_output 是用于提交生成代码的工具，不是生成的函数体中需要调用的函数；提交后本次代码生成结束。`;
+        5. final_output 是用于提交生成代码的工具，不是生成的函数体中需要调用的函数；收到错误反馈后可以修正并重新提交；有效提交后本次代码生成结束。`;
     }
 }
 
