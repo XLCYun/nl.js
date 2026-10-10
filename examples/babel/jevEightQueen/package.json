@@ -3,10 +3,13 @@
   "version": "0.0.1",
   "scripts": {
     "build": "babel index.js --out-dir lib",
-    "start": "node lib/index.js"
+    "start": "node -r dotenv/config lib/index.js",
+    "prerun": "npm run build",
+    "run": "node -r dotenv/config lib/index.js"
   },
   "dependencies": {
-    "@nljs/core": "file:../../../packages/core"
+    "@nljs/core": "file:../../../packages/core",
+    "dotenv": "^18.0.7"
   },
   "devDependencies": {
     "@babel/cli": "^7.23.0",

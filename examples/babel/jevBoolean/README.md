@@ -2,13 +2,12 @@
 
 这个示例通过 `nl` 标签将 `1 > 0` 交给 Jev 判断，直接打印布尔结果。示例源码不包含预期答案断言。
 
-需要 Node.js 20+ 和已获得访问资格的 [TypeSafe API Key](https://console.typesafe.ai/keys)。从仓库根目录安装依赖并编译：
+需要 Node.js 20+ 和已获得访问资格的 [TypeSafe API Key](https://console.typesafe.ai/keys)。从仓库根目录安装依赖：
 
 ```bash
 npm install --prefix packages/core
 npm install --prefix packages/babel
 npm install --prefix examples/babel/jevBoolean
-npm run build --prefix examples/babel/jevBoolean
 ```
 
 通过环境变量开启 Jev：
@@ -16,14 +15,19 @@ npm run build --prefix examples/babel/jevBoolean
 ```bash
 export TYPESAFE_API_KEY='your-typesafe-api-key'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
-NLJS_PROVIDER=jev node examples/babel/jevBoolean/lib/index.js
+NLJS_PROVIDER=jev npm run run --prefix examples/babel/jevBoolean
 ```
 
-也可以进入此目录，将 `.env.example` 复制为 `.env`，填写 key 后运行：
+也可以进入此目录，将 `.env.example` 复制为 `.env`（已有文件时直接编辑），填写 key 后运行：
 
 ```bash
-node --env-file=.env lib/index.js
+cd examples/babel/jevBoolean
+cp .env.example .env
+# 编辑 .env，填写 TYPESAFE_API_KEY
+npm run run
 ```
+
+`npm run run` 会先编译，再通过 dotenv 加载本目录的 `.env`；终端已导出的同名变量优先。`.env` 已被 Git 忽略，提交时只保留 `.env.example`。
 
 预期标准输出为：
 
