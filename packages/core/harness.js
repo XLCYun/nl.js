@@ -97,7 +97,7 @@ function parseFinalOutput(completion) {
   return output.asyncFuncBody;
 }
 
-async function runCodeGeneration({ openai, model, prompt }) {
+async function runCodeGeneration({ openai, model, prompt, maxRounds }) {
   const messages = [
     {
       role: 'system',
@@ -106,7 +106,7 @@ async function runCodeGeneration({ openai, model, prompt }) {
     { role: 'user', content: prompt },
   ];
 
-  for (let round = 1; round <= 10; round += 1) {
+  for (let round = 1; round <= maxRounds; round += 1) {
     const completion = await openai.chat.completions.create({
       model,
       messages,
@@ -122,8 +122,8 @@ async function runCodeGeneration({ openai, model, prompt }) {
       return parseFinalOutput(completion);
     } catch (error) {
       if (!(error instanceof SubmissionError)) throw error;
-      if (round === 10) {
-        throw new Error(`达到代码生成轮数上限 10：${error.message}`, { cause: error });
+      if (round === maxRounds) {
+        throw new Error(`达到代码生成轮数上限 ${maxRounds}：${error.message}`, { cause: error });
       }
       const toolCalls = choice.message.tool_calls || [];
       const feedback = toolCalls.length

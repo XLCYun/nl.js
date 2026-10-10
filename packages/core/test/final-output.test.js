@@ -285,6 +285,145 @@ test('ten normal replies without a tool submission stop without consuming respon
   assert.equal(requests.length, 10);
 });
 
+test('a configured round limit includes the first request and stops an unfinished generation', async () => {
+  respondWith(() => jsonResponse(completion(undefined, 'stop', { content: 'Still preparing.' })));
+  for (const maxRounds of [1, 3]) {
+    const params = input();
+    params.global.maxRounds = maxRounds;
+    const previousRequests = requests.length;
+
+    await assert.rejects(generate(params), new RegExp(`代码生成失败:.*轮数上限 ${maxRounds}：.*final_output`));
+    assert.equal(requests.length - previousRequests, maxRounds);
+  }
+});
+
+test('invalid round limits fail before a model request without converting their types', async () => {
+  respondWith(() => jsonResponse(completion([finalOutputCall('return 14;')])));
+  for (const maxRounds of [
+    null, 0, -1, 1.5, NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1,
+    '2', '', true, false, 2n, {}, [], new Number(2),
+  ]) {
+    const params = input();
+    params.global.maxRounds = maxRounds;
+    await assert.rejects(generate(params), /__NLJS_GLOBAL\.maxRounds.*正.*安全整数/);
+  }
+  assert.equal(requests.length, 0);
+});
+
+test('positive safe integer limits accept a valid submission in their first round', async () => {
+  respondWith(() => jsonResponse(completion([finalOutputCall('return 14;')])));
+  for (const maxRounds of [1, Number.MAX_SAFE_INTEGER]) {
+    const params = input();
+    params.global.maxRounds = maxRounds;
+    assert.equal(await eval(await generate(params)), 14);
+  }
+  assert.equal(requests.length, 2);
+});
+
+test('a running generation keeps its configuration and context while the next generation sees changes', async () => {
+  const params = input('返回 state.value', { state: { value: 'original' } });
+  params.global.maxRounds = 2;
+  respondWith(() => {
+    if (requests.length === 1) {
+      params.global.maxRounds = 1;
+      params.scope.state.value = 'changed';
+      process.env.OPENAI_MODEL = 'next-code-model';
+      process.env.OPENAI_BASE_URL = 'https://next-openai.example/v1';
+      return jsonResponse(completion(undefined, 'stop', { content: 'Preparing the body.' }));
+    }
+    return jsonResponse(completion([finalOutputCall('return "original";')]));
+  });
+
+  assert.equal(await eval(await generate(params)), 'original');
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].url, 'https://openai.example/v1/chat/completions');
+  assert.equal(requests[1].body.model, 'test-code-model');
+  assert.deepEqual(requests[1].body.messages.slice(0, 2), requests[0].body.messages);
+  assert.ok(requests[1].body.messages[1].content.includes('"value":"original"'));
+
+  const next = input('再次返回 state.value', params.scope);
+  next.global = params.global;
+  respondWith(() => jsonResponse(completion(undefined, 'stop', { content: 'Not submitted.' })));
+  await assert.rejects(generate(next), /轮数上限 1：.*final_output/);
+  assert.equal(requests.length, 3);
+  assert.equal(requests[2].url, 'https://next-openai.example/v1/chat/completions');
+  assert.equal(requests[2].body.model, 'next-code-model');
+  assert.equal(requests[2].body.messages.length, 2);
+  assert.ok(requests[2].body.messages[1].content.includes('"value":"changed"'));
+});
+
+test('a failed generation can be retried with a new limit and its repaired code bypasses invalid configuration when cached', async () => {
+  const params = input();
+  params.global.maxRounds = 1;
+  respondWith(() => jsonResponse(completion(undefined, 'stop', { content: 'Not submitted.' })));
+  await assert.rejects(generate(params), /轮数上限 1：/);
+  assert.equal(requests.length, 1);
+
+  params.global.maxRounds = 2;
+  respondWith(() => jsonResponse(requests.length === 2
+    ? withArguments('{')
+    : completion([finalOutputCall('return 15;')])));
+  const code = await generate(params);
+  assert.equal(await eval(code), 15);
+  assert.equal(requests.length, 3);
+  assert.equal(requests[1].body.messages.length, 2);
+
+  params.global.maxRounds = null;
+  assert.equal(await generate(params), code);
+  assert.equal(requests.length, 3);
+});
+
+test('concurrent generations keep separate round limits, models and conversation histories', { timeout: 2000 }, async () => {
+  const first = input('返回 session-A 的结果', { session: 'session-A' });
+  first.global.maxRounds = 2;
+  const second = input('返回 session-B 的结果', { session: 'session-B' });
+  second.global.maxRounds = 3;
+  const sessions = { 'session-A': [], 'session-B': [] };
+  let releaseFirstReplies;
+  const bothStarted = new Promise((resolve) => { releaseFirstReplies = resolve; });
+  let started = 0;
+  respondWith(async (request) => {
+    const session = request.body.messages[1].content.includes('session-A') ? 'session-A' : 'session-B';
+    const round = sessions[session].push(request);
+    if (round === 1) {
+      started += 1;
+      if (started === 2) releaseFirstReplies();
+      await bothStarted;
+    }
+    return jsonResponse(session === 'session-B' && round === 3
+      ? completion([finalOutputCall('return "session-B";')])
+      : completion(undefined, 'stop', { content: `${session} reply ${round}` }));
+  });
+
+  process.env.OPENAI_MODEL = 'first-model';
+  const firstGeneration = generate(first);
+  process.env.OPENAI_MODEL = 'second-model';
+  const secondGeneration = generate(second);
+  process.env.OPENAI_MODEL = 'later-model';
+  const [firstResult, secondResult] = await Promise.allSettled([firstGeneration, secondGeneration]);
+
+  assert.equal(firstResult.status, 'rejected');
+  assert.match(firstResult.reason.message, /轮数上限 2：/);
+  assert.equal(secondResult.status, 'fulfilled');
+  assert.equal(await eval(secondResult.value), 'session-B');
+  assert.equal(sessions['session-A'].length, 2);
+  assert.equal(sessions['session-B'].length, 3);
+  for (const [session, expectedModel, other] of [
+    ['session-A', 'first-model', 'session-B'],
+    ['session-B', 'second-model', 'session-A'],
+  ]) {
+    for (const [round, request] of sessions[session].entries()) {
+      assert.equal(request.body.model, expectedModel);
+      assert.equal(request.body.messages.length, 2 + round * 2);
+      assert.ok(!JSON.stringify(request.body.messages).includes(other));
+      assert.deepEqual(request.body.messages.slice(0, 2), sessions[session][0].body.messages);
+      for (let previous = 0; previous < round; previous += 1) {
+        assert.equal(request.body.messages[2 + previous * 2].content, `${session} reply ${previous + 1}`);
+      }
+    }
+  }
+});
+
 test('submitted bodies retain await and caller variable access when their code is cached', async () => {
   let a = 1;
   const b = 2;

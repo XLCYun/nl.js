@@ -10,6 +10,7 @@ const codeCache = new Cache();
  * 生成代码，或在 Jev 模式下返回布尔常量表达式
  * @param {Object} params - 参数对象
  * @param {Object} params.global - 全局对象，包含 sourceCode
+ * @param {number} [params.global.maxRounds=10] - 本次未命中缓存的代码生成轮数上限
  * @param {Object} params.scope - 作用域对象，包含变量名和值
  * @param {Object} params.source - 源代码信息
  * @param {string} params.source.code - 源代码
@@ -34,6 +35,11 @@ async function generate({ global, scope, source }) {
     return cachedCode;
   }
 
+  const configuredMaxRounds = global.maxRounds;
+  const maxRounds = configuredMaxRounds === undefined ? 10 : configuredMaxRounds;
+  if (!Number.isSafeInteger(maxRounds) || maxRounds <= 0) {
+    throw new Error('__NLJS_GLOBAL.maxRounds 必须是正的安全整数');
+  }
   const context = new Context({ global, scope, source });
   const prompt = context.getPrompt();
 
@@ -48,6 +54,7 @@ async function generate({ global, scope, source }) {
       openai,
       model: process.env.OPENAI_MODEL || 'deepseek-v4-pro-0813',
       prompt,
+      maxRounds,
     });
     // 保留函数体原文，换行避免末尾的单行注释吞掉函数外壳。
     const code = `(async function () {\n${asyncFuncBody}\n})()`;
