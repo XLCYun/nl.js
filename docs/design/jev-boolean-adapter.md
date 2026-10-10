@@ -27,7 +27,7 @@ const result = nl`1 > 0`;
 | `generate({ global, scope, source })` 继续返回可执行的 JavaScript 字符串，Jev 路径只返回 `"true"` 或 `"false"` | [core/index.js](../../packages/core/index.js) |
 | 每个 `nl` 片段都会转换成 `await eval(await generate(...))` | [babel/index.js](../../packages/babel/index.js)，第 12–14 行 |
 | Babel 目前只识别 `nl`，没有布尔 tag 或返回类型标记 | [babel/index.js](../../packages/babel/index.js)，第 25、58 行 |
-| 原有代码生成提示词要求使用 `<nl>` 标签；Jev 单独构造 Noul 问题 | [context.js](../../packages/core/context.js)、[jev.js](../../packages/core/jev.js) |
+| 代码生成要求通过 `final_output` 工具提交异步函数体；Jev 单独构造 Noul 问题，不使用该工具协议 | [context.js](../../packages/core/context.js)、[jev.js](../../packages/core/jev.js)、[工具协议设计](final-output-tool.md) |
 | 缓存按完整源码与片段位置保存代码，不包含运行时状态 | [cache.js](../../packages/core/cache.js)，第 12–25 行 |
 | `nl` 既用于语义判断，也用于字符串生成、修改状态和交互 | [react](../../examples/babel/react/index.js)、[nlarg](../../examples/babel/nlarg/index.js)、[eightQueen](../../examples/babel/eightQueen/index.js) |
 

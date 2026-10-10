@@ -183,7 +183,23 @@ test('OpenAI stays the default and its cached code cannot bypass an explicit swi
   process.env.OPENAI_MODEL = 'test-code-model';
   respondWith((request) => jsonResponse(request.url.endsWith('/systemone')
     ? noulResponse(0.01)
-    : { choices: [{ message: { content: '<nl>return 42;</nl>' } }] }));
+    : {
+      choices: [{
+        finish_reason: 'tool_calls',
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{
+            id: 'call_final_output',
+            type: 'function',
+            function: {
+              name: 'final_output',
+              arguments: JSON.stringify({ asyncFuncBody: 'return 42;' }),
+            },
+          }],
+        },
+      }],
+    }));
   const params = input('return 42');
 
   assert.equal(await eval(await generate(params)), 42);

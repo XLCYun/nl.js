@@ -12,7 +12,7 @@ async function main() {
 main();
 ```
 
-项目包含 Babel 插件、运行时和命令行示例。Babel 负责转换 `nl` 模板标签，运行时默认通过 OpenAI 兼容的 Chat Completions 接口生成 JavaScript，再在调用位置执行。设置 `NLJS_PROVIDER=jev` 后，`nl` 片段改为通过 TypeSafe 的 Jev 模型判断条件，返回布尔值。
+项目包含 Babel 插件、运行时和命令行示例。Babel 负责转换 `nl` 模板标签，运行时默认通过 OpenAI 兼容的 Chat Completions 接口生成 JavaScript，要求模型调用 `final_output` 工具提交异步函数体，再在调用位置执行。设置 `NLJS_PROVIDER=jev` 后，`nl` 片段改为通过 TypeSafe 的 Jev 模型判断条件，返回布尔值。
 
 ## 快速开始
 
@@ -77,7 +77,7 @@ Hello, World!
 | `TYPESAFE_DEFAULT_MODEL` | Jev 模型名称 | `jev-latest` |
 | `DEBUG` | 输出调试日志 | 关闭；只有字符串 `true` 会开启 |
 
-使用 `openai` 模式时，默认接口地址和默认模型名称分别来自 SDK 和本项目。请显式设置 `OPENAI_BASE_URL`、`OPENAI_MODEL`，确保它们属于同一个服务且模型支持 Chat Completions。
+使用 `openai` 模式时，默认接口地址和默认模型名称分别来自 SDK 和本项目。请显式设置 `OPENAI_BASE_URL`、`OPENAI_MODEL`，确保它们属于同一个服务且支持 Chat Completions 工具调用，包括指定 `tool_choice` 和 `parallel_tool_calls: false`。本项目不要求服务支持 `strict: true`，工具参数由运行时校验；仅支持文本回复的模型无法用于此路径。
 
 在示例目录中开启调试：
 
@@ -85,7 +85,7 @@ Hello, World!
 DEBUG=true node lib/index.js
 ```
 
-OpenAI 路径的日志包含 `prompt:`、`response from LLM`、`generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率和布尔结果。
+OpenAI 路径在请求前输出 `prompt:`，返回后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率和布尔结果。
 
 项目不会自动加载 `.env`。如果希望通过文件配置，可以在当前示例目录创建 `.env`：
 
@@ -173,10 +173,24 @@ Q . . . . . . .
 ## 工作原理
 
 1. **编译**：`@nljs/babel` 找到 `nl` 模板标签，注入 `@nljs/core`，记录原始源码、片段位置和可收集的作用域变量，将标签转换为包含 `await` 的生成与执行调用。
-2. **生成或判断**：运行到该位置时，`@nljs/core` 根据 `NLJS_PROVIDER` 选择路径。默认的 OpenAI 路径先检查代码缓存，未命中时请求 `<nl>...</nl>` 包裹的 JavaScript；Jev 路径将片段与当前上下文交给 Noul，按概率返回 `"true"` 或 `"false"` 常量表达式。
-3. **执行**：运行时提取代码，包装为异步函数表达式，并在原调用位置通过 `await eval(...)` 执行。生成代码可以读取调用处的变量，也可以返回值供后续代码使用。
+2. **生成或判断**：运行到该位置时，`@nljs/core` 根据 `NLJS_PROVIDER` 选择路径。默认的 OpenAI 路径先检查代码缓存，未命中时指定模型调用 `final_output` 工具，通过 `asyncFuncBody` 提交异步函数体；Jev 路径将片段与当前上下文交给 Noul，按概率返回 `"true"` 或 `"false"` 常量表达式。
+3. **执行**：运行时校验工具提交，将函数体包装为异步立即执行函数表达式，并在原调用位置通过 `await eval(...)` 执行。生成代码可以读取或修改调用处可写的变量，也可以通过 `return` 提供片段结果。Jev 的布尔常量表达式沿用同一调用位置执行。
 
 编译本身不调用模型。`lib/index.js` 包含运行时生成代码的调用，模型生成的代码不会写回这个文件。
+
+### 模型输出约定
+
+`final_output(output: { asyncFuncBody: string })` 的参数对象直接包含 `asyncFuncBody`，例如：
+
+```json
+{"asyncFuncBody":"return a + b;"}
+```
+
+Chat Completions 响应中的 `tool_calls[0].function.arguments` 是这个对象的 JSON 字符串。运行时要求响应以 `finish_reason: "tool_calls"` 结束，且只有一次 `final_output` 函数工具调用；提交内容只包含函数体，可以使用 `return` 和 `await`，不包含外层函数定义。
+
+模型通过工具提交后，本次生成结束，无需再请求一轮模型。缺少调用、多个调用、模型拒绝、响应截断或参数无效时直接报错，不读取普通正文或旧的 `<nl>...</nl>` 输出补救，也不会发起额外的模型纠错请求或写入代码缓存。显式提交空函数体是有效的，其片段结果为 `undefined`。参数格式校验不等于 JavaScript 语法或行为校验。
+
+完整协议及设计选择见 [final_output 设计记录](docs/design/final-output-tool.md)。
 
 ### 编写自己的示例
 
@@ -245,13 +259,15 @@ node lib/index.js
 
 如果日志中的源码和当前 `index.js` 不一致，也需要重新编译，更新旧的 `lib/index.js`。
 
-### `Cannot read properties of undefined (reading '0')`
+### `代码生成失败: 模型响应必须以 final_output 工具调用结束`
 
-当前运行时直接读取 `completion.choices[0]`。这个错误表示接口返回的数据缺少预期的 `choices` 字段，需要检查接口地址及返回格式。
+开启 `DEBUG=true`，检查完整响应中的 `choices[0].finish_reason` 和 `choices[0].message.tool_calls`。服务返回普通文本、缺少 `choices`、响应被截断或内容被过滤时，都不能作为有效的代码提交。
 
-例如，Base URL 遗漏服务要求的 API 路径时，某些服务会返回 HTTP 200 的 HTML 网页。SDK 收到网页内容后，运行时仍尝试读取 `choices[0]`，就会出现这个错误。
+确认 Base URL 包含正确的 API 基础路径，并确认模型与服务支持指定 `final_output` 工具调用。若服务返回不支持 `tools`、`tool_choice` 或 `parallel_tool_calls` 的错误，需要改用支持这些能力的模型或服务；运行时不会降级为文本生成。
 
-确认 Base URL 包含正确的 API 基础路径，再检查响应是否为 Chat Completions 格式的 JSON。服务返回错误对象或其他协议的数据时，也可能出现相同问题。
+### `final_output` 参数错误
+
+`function.arguments` 必须是合法的 JSON 字符串，解析后是只含 `asyncFuncBody` 字符串字段的对象。字段缺失、值为 `null` 或其他非字符串类型、额外字段，以及嵌套成 `output.asyncFuncBody` 都会被拒绝。错误会保留原始异常作为 `cause`，失败提交不会写入代码缓存。
 
 ### 找不到 `@nljs/core`、`openai` 或 `@babel/template`
 
@@ -269,7 +285,7 @@ npm install --prefix examples/babel/helloWorld
 
 ### 输出为空、返回 `undefined` 或生成代码执行失败
 
-开启 `DEBUG=true`，查看 `response from LLM` 和 `generated code`。当前解析器要求模型返回 `<nl>...</nl>` 标签中的代码；缺少标签时会生成空函数。自然语言描述、模型返回值和生成代码都可能影响结果，可先用 `helloWorld` 验证接口链路。
+开启 `DEBUG=true`，查看 `response from LLM` 中提交的 `asyncFuncBody` 和 `generated code`。函数体为空或没有执行 `return` 时，片段结果可以是 `undefined`；缺少有效工具提交则会明确报错。工具参数校验通过后，生成代码的语法和执行错误仍在调用处暴露，可先用 `helloWorld` 验证接口链路。
 
 ## 项目结构与开发
 
@@ -289,7 +305,7 @@ npm test --prefix packages/core
 npm test --prefix packages/babel -- --runInBand
 ```
 
-测试覆盖插件转换、作用域变量收集、provider 切换、Jev 概率转换、缓存隔离和错误处理。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口。
+测试覆盖插件转换、作用域变量收集、`final_output` 请求与参数校验、异步函数体执行、无效提交不缓存、provider 切换、Jev 概率转换和缓存隔离。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口。
 
 当前实现的边界：
 
