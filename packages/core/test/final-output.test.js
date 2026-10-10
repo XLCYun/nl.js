@@ -8,6 +8,7 @@ let savedFetch;
 let savedConsoleError;
 let requests;
 let inputId = 0;
+let callId = 0;
 
 function input(question = '返回 a + b', scope = {}) {
   const block = 'nl`' + question + '`';
@@ -21,9 +22,9 @@ function input(question = '返回 a + b', scope = {}) {
   };
 }
 
-function finalOutputCall(asyncFuncBody) {
+function finalOutputCall(asyncFuncBody, id = `call_final_output_${++callId}`) {
   return {
-    id: 'call_final_output',
+    id,
     type: 'function',
     function: {
       name: 'final_output',
@@ -45,8 +46,8 @@ function completion(toolCalls, finishReason = 'tool_calls', message = {}) {
   };
 }
 
-function withArguments(value) {
-  const call = finalOutputCall('return 42;');
+function withArguments(value, id) {
+  const call = finalOutputCall('return 42;', id);
   call.function.arguments = value;
   return completion([call]);
 }
@@ -171,6 +172,27 @@ test('invalid JSON is returned to its original tool call so the model can correc
   assert.match(messages[3].content, /final_output/);
 });
 
+test('a tool call ID reused in a later round aborts before a duplicate conversation is sent', async () => {
+  for (const secondArguments of ['{', '{"asyncFuncBody":"return 7;"}']) {
+    const first = withArguments('{');
+    first.choices[0].message.tool_calls[0].id = 'call_reused';
+    const second = withArguments(secondArguments);
+    second.choices[0].message.tool_calls[0].id = 'call_reused';
+    const previousRequests = requests.length;
+    respondWith(() => jsonResponse([
+      first, second, completion([finalOutputCall('return 7;')]),
+    ][requests.length - previousRequests - 1]));
+
+    await assert.rejects(generate(input()), /代码生成失败:.*工具调用 ID.*互不重复/);
+    assert.equal(requests.length - previousRequests, 2);
+    assert.deepEqual(requests.at(-1).body.messages[2], first.choices[0].message);
+    for (const request of requests.slice(previousRequests)) {
+      const ids = request.body.messages.flatMap((message) => (message.tool_calls || []).map((call) => call.id));
+      assert.equal(new Set(ids).size, ids.length);
+    }
+  }
+});
+
 test('invalid argument fields are explained to the model and can be resubmitted', async () => {
   for (const args of [
     'null', '[]', '42', '{}', '{"asyncFuncBody":null}', '{"asyncFuncBody":42}',
@@ -187,7 +209,7 @@ test('invalid argument fields are explained to the model and can be resubmitted'
     const messages = requests.at(-1).body.messages;
     assert.deepEqual(messages[2], invalid.choices[0].message);
     assert.equal(messages[3].role, 'tool');
-    assert.equal(messages[3].tool_call_id, 'call_final_output');
+    assert.equal(messages[3].tool_call_id, invalid.choices[0].message.tool_calls[0].id);
     assert.match(messages[3].content, /仅包含 asyncFuncBody 字符串/);
   }
 });
@@ -310,6 +332,21 @@ test('invalid round limits fail before a model request without converting their 
   assert.equal(requests.length, 0);
 });
 
+test('omitted or null global preserves the default ten-round generation limit', async () => {
+  for (const global of [undefined, null]) {
+    const params = input();
+    if (global === undefined) delete params.global;
+    else params.global = global;
+    const previousRequests = requests.length;
+    respondWith(() => jsonResponse(requests.length - previousRequests < 10
+      ? completion(undefined, 'stop', { content: 'Still preparing.' })
+      : completion([finalOutputCall('return 7;')])));
+
+    assert.equal(await eval(await generate(params)), 7);
+    assert.equal(requests.length - previousRequests, 10);
+  }
+});
+
 test('positive safe integer limits accept a valid submission in their first round', async () => {
   respondWith(() => jsonResponse(completion([finalOutputCall('return 14;')])));
   for (const maxRounds of [1, Number.MAX_SAFE_INTEGER]) {
@@ -421,6 +458,38 @@ test('concurrent generations keep separate round limits, models and conversation
         assert.equal(request.body.messages[2 + previous * 2].content, `${session} reply ${previous + 1}`);
       }
     }
+  }
+});
+
+test('separate and concurrent generations may reuse tool call IDs', { timeout: 2000 }, async () => {
+  const names = ['sequential-first', 'sequential-second', 'parallel-first', 'parallel-second'];
+  const sessions = Object.fromEntries(names.map((name) => [name, []]));
+  let releaseFirstReplies;
+  const bothStarted = new Promise((resolve) => { releaseFirstReplies = resolve; });
+  let started = 0;
+  respondWith(async (request) => {
+    const name = names.find((name) => request.body.messages[1].content.includes(name));
+    const round = sessions[name].push(request);
+    if (name.startsWith('parallel') && round === 1) {
+      started += 1;
+      if (started === 2) releaseFirstReplies();
+      await bothStarted;
+    }
+    return jsonResponse(round === 1
+      ? withArguments('{', 'call_shared_invalid')
+      : completion([finalOutputCall(`return ${JSON.stringify(name)};`, 'call_shared_final')]));
+  });
+
+  for (const name of names.slice(0, 2)) {
+    assert.equal(await eval(await generate(input(`返回 ${name}`))), name);
+  }
+  const generated = await Promise.all(names.slice(2).map((name) => generate(input(`返回 ${name}`))));
+  assert.deepEqual(await Promise.all(generated.map((code) => eval(code))), names.slice(2));
+  for (const history of Object.values(sessions)) {
+    assert.equal(history.length, 2);
+    assert.equal(history[0].body.messages.length, 2);
+    assert.equal(history[1].body.messages[2].tool_calls[0].id, 'call_shared_invalid');
+    assert.equal(history[1].body.messages[3].tool_call_id, 'call_shared_invalid');
   }
 });
 

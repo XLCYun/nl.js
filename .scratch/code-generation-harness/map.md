@@ -31,6 +31,7 @@ Status: in-progress
 - 各实现工单使用独立分支和 worktree，经合并代理集成；最后从固定基线进行 Standards 与 Spec 两项审查。
 - 01、02、03 已完成并合入。core 70 项、Babel 19 项测试及编译后配置冒烟检查通过；文档链接与示例已验证。
 - Standards 审查 0 项，Spec 审查 1 项，补充兼容性验证 1 项；统一由[工单 04](issues/04-review-fixes.md)修复，见[审查记录](review.md)。
+- 04 的两项修复及回归已在工作分支完成，等待集成：core 73 项、Babel 19 项通过；省略 global 保留默认配置，ID 约束覆盖整个会话且不跨会话共享。
 
 ## Fog
 
