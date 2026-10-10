@@ -88,6 +88,17 @@ test('Jev uses its own API, model configuration and current source context witho
   assert.match(requests[0].body.questions.result.instructions, /<\/nl-judge>/);
 });
 
+test('Jev ignores invalid code generation round limits on its file global', async () => {
+  respondWith(() => jsonResponse(noulResponse(0.99)));
+  for (const maxRounds of [null, 0, 'invalid']) {
+    const params = input('当前状态是否合法', { x: 1 });
+    params.global.maxRounds = maxRounds;
+    assert.equal(await generate(params), 'true');
+  }
+  assert.equal(requests.length, 3);
+  assert.ok(requests.every((request) => request.url.endsWith('/v1/systemone')));
+});
+
 test('Jev receives the nl question directly in its instructions alongside the runtime state', async () => {
   respondWith(() => jsonResponse(noulResponse(0.01)));
   const question = 'Is it legal to place a queen at chessboard[row][column]?';
