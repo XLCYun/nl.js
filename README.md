@@ -58,7 +58,7 @@ Base URL 应包含服务要求的 API 基础路径，例如 `/v1`。SDK 会自�
 继续在 `examples/babel/helloWorld` 目录执行：
 
 ```bash
-npm run run
+npm start
 ```
 
 正常情况下会输出：
@@ -67,7 +67,7 @@ npm run run
 Hello, World!
 ```
 
-`npm run run` 会先通过 `prerun` 执行编译，再用 `node -r dotenv/config lib/index.js` 加载当前示例的 `.env` 并运行。修改源码后重新运行即可；模型请求发生在运行阶段。需要只编译时，仍可使用 `npm run build`。
+`npm start` 会先通过 `prestart` 执行编译，再用 `node -r dotenv/config lib/index.js` 加载当前示例的 `.env` 并运行。修改源码后重新运行即可；模型请求发生在运行阶段。需要只编译时，仍可使用 `npm run build`。
 
 ## 配置与调试
 
@@ -89,20 +89,20 @@ Hello, World!
 在示例目录中开启调试：
 
 ```bash
-DEBUG=true npm run run
+DEBUG=true npm start
 ```
 
 OpenAI 路径在请求前输出 `prompt:`，返回后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率和布尔结果。
 
-所有示例的 `npm run run` 都通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
+所有示例的 `npm start` 都通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
 
 也可以从仓库根目录运行，npm 会在对应示例目录加载配置；`--` 后面的参数会原样传给示例：
 
 ```bash
-npm run run --prefix examples/babel/computer -- "计算 123 加 456"
+npm start --prefix examples/babel/computer -- "计算 123 加 456"
 ```
 
-终端已导出的同名环境变量优先于 `.env`，因此可以用 `DEBUG=true npm run run` 临时开启日志。切换 provider 时也要留意终端里的 `NLJS_PROVIDER`。直接运行编译产物时，使用 `node -r dotenv/config lib/index.js` 加载配置。
+终端已导出的同名环境变量优先于 `.env`，因此可以用 `DEBUG=true npm start` 临时开启日志。切换 provider 时也要留意终端里的 `NLJS_PROVIDER`。直接运行编译产物时，使用 `node -r dotenv/config lib/index.js` 加载配置。
 
 ### 启用 Jev 布尔判断
 
@@ -117,10 +117,10 @@ npm install --prefix examples/babel/jevBoolean
 
 export TYPESAFE_API_KEY='your-typesafe-api-key'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
-NLJS_PROVIDER=jev npm run run --prefix examples/babel/jevBoolean
+NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
 ```
 
-示例的判断是 `` const result = nl`1 > 0`; ``，直接打印 Jev 返回概率经阈值转换后的布尔结果，预期输出 `true`。示例源码不包含预期答案断言，也没有提前在本地计算 `1 > 0`。也可以使用示例目录中的 [.env.example](examples/babel/jevBoolean/.env.example) 配置，再运行 `npm run run`。
+示例的判断是 `` const result = nl`1 > 0`; ``，直接打印 Jev 返回概率经阈值转换后的布尔结果，预期输出 `true`。示例源码不包含预期答案断言，也没有提前在本地计算 `1 > 0`。也可以使用示例目录中的 [.env.example](examples/babel/jevBoolean/.env.example) 配置，再运行 `npm start`。
 
 此配置对运行进程内的所有 `nl` 片段生效，适用于只做布尔判断的程序。打印、生成字符串、修改变量或询问用户等片段仍应使用 `openai` 模式。Jev 使用独立 SDK 和 `/v1/systemone` 接口，不需要设置 `OPENAI_API_KEY`。[TypeSafe SDK](https://docs.typesafe.ai/sdk/javascript)
 
@@ -134,24 +134,24 @@ Jev Noul 返回条件成立的概率，运行时将 `p > 0.5` 转为 `true`，�
 cd examples/babel/eightQueen
 npm install
 # 首次使用时复制 .env.example 为 .env，并填写配置
-DEBUG=true npm run run
+DEBUG=true npm start
 ```
 
 下表的运行命令都在对应示例目录中执行，并假定已经安装依赖并填写 `.env`；运行时会自动编译。
 
 | 示例 | 内容 | 运行命令 |
 | --- | --- | --- |
-| [helloWorld](examples/babel/helloWorld) | 用自然语言输出 Hello World | `npm run run` |
-| [jevBoolean](examples/babel/jevBoolean) | 让 Jev 判断 `1 > 0` 并打印布尔结果 | `npm run run` |
-| [eightQueen](examples/babel/eightQueen) | 用自然语言描述棋盘操作和判断，递归求解八皇后问题 | `npm run run` |
-| [jevEightQueen](examples/babel/jevEightQueen) | JavaScript 回溯搜索，让 Jev 判断每次落子是否安全 | `npm run run` |
-| [asyncSleep](examples/babel/asyncSleep) | 从参数读取秒数，异步等待并逐秒输出 | `npm run run -- 3` |
-| [computer](examples/babel/computer) | 根据自然语言参数进行数学计算 | `npm run run -- "计算 123 加 456"` |
-| [multiLangRoshambo](examples/babel/multiLangRoshambo) | 读取石头剪刀布选项，用相同语言输出能获胜的选项 | `npm run run -- "石头"` |
-| [nlarg](examples/babel/nlarg) | 根据描述生成命令参数，包含交互确认和执行步骤 | `npm run run -- ls "list all files including hidden files"` |
-| [planner](examples/babel/planner) | 将任务拆成待办，逐项输出并标记完成 | `npm run run -- "clean the house"` |
-| [react](examples/babel/react) | ReAct 风格的任务循环，通过终端输入提供行动观察 | `npm run run -- "帮我规划一次周末旅行"` |
-| [metaAgent](examples/babel/metaAgent) | 根据任务生成 Agent 描述、提示词和工具名列表 | `npm run run -- "获取网页内容并转换为大写"` |
+| [helloWorld](examples/babel/helloWorld) | 用自然语言输出 Hello World | `npm start` |
+| [jevBoolean](examples/babel/jevBoolean) | 让 Jev 判断 `1 > 0` 并打印布尔结果 | `npm start` |
+| [eightQueen](examples/babel/eightQueen) | 用自然语言描述棋盘操作和判断，递归求解八皇后问题 | `npm start` |
+| [jevEightQueen](examples/babel/jevEightQueen) | JavaScript 回溯搜索，让 Jev 判断每次落子是否安全 | `npm start` |
+| [asyncSleep](examples/babel/asyncSleep) | 从参数读取秒数，异步等待并逐秒输出 | `npm start -- 3` |
+| [computer](examples/babel/computer) | 根据自然语言参数进行数学计算 | `npm start -- "计算 123 加 456"` |
+| [multiLangRoshambo](examples/babel/multiLangRoshambo) | 读取石头剪刀布选项，用相同语言输出能获胜的选项 | `npm start -- "石头"` |
+| [nlarg](examples/babel/nlarg) | 根据描述生成命令参数，包含交互确认和执行步骤 | `npm start -- ls "list all files including hidden files"` |
+| [planner](examples/babel/planner) | 将任务拆成待办，逐项输出并标记完成 | `npm start -- "clean the house"` |
+| [react](examples/babel/react) | ReAct 风格的任务循环，通过终端输入提供行动观察 | `npm start -- "帮我规划一次周末旅行"` |
+| [metaAgent](examples/babel/metaAgent) | 根据任务生成 Agent 描述、提示词和工具名列表 | `npm start -- "获取网页内容并转换为大写"` |
 
 `planner` 通过打印下一步操作来模拟执行；`react` 等待用户输入观察结果；`metaAgent` 输出 Agent 配置，其 `httpGet` 工具只是返回 URL。`nlarg` 的执行步骤会运行实际系统命令。
 
@@ -213,7 +213,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-不需要定义或导入 `nl` 函数，插件会处理这个标签。插件插入 `await`，因此调用位置必须允许使用 `await`。完成后，在新示例目录运行 `npm install`，复制 `.env.example` 为 `.env` 并填写配置，然后执行 `npm run run`。
+不需要定义或导入 `nl` 函数，插件会处理这个标签。插件插入 `await`，因此调用位置必须允许使用 `await`。完成后，在新示例目录运行 `npm install`，复制 `.env.example` 为 `.env` 并填写配置，然后执行 `npm start`。
 
 ## 代码缓存
 
@@ -252,7 +252,7 @@ __NLJS_CORE.disableCodeCache();
 通常是直接执行了未编译的源码。进入示例目录，先编译，再运行产物：
 
 ```bash
-npm run run
+npm start
 ```
 
 如果日志中的源码和当前 `index.js` 不一致，也需要重新编译，更新旧的 `lib/index.js`。
@@ -279,7 +279,7 @@ npm install --prefix examples/babel/helloWorld
 
 ### 修改了配置，但运行时没有变化
 
-确认 `.env` 位于当前示例目录，且已填写 Key、Base URL 和模型名；用 `npm run run` 自动加载。终端已导出的同名变量优先于 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。
+确认 `.env` 位于当前示例目录，且已填写 Key、Base URL 和模型名；用 `npm start` 自动加载。终端已导出的同名变量优先于 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。
 
 ### 输出为空、返回 `undefined` 或生成代码执行失败
 

@@ -15,7 +15,7 @@ npm install --prefix examples/babel/jevBoolean
 ```bash
 export TYPESAFE_API_KEY='your-typesafe-api-key'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
-NLJS_PROVIDER=jev npm run run --prefix examples/babel/jevBoolean
+NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
 ```
 
 也可以进入此目录，将 `.env.example` 复制为 `.env`（已有文件时直接编辑），填写 key 后运行：
@@ -24,10 +24,10 @@ NLJS_PROVIDER=jev npm run run --prefix examples/babel/jevBoolean
 cd examples/babel/jevBoolean
 cp .env.example .env
 # 编辑 .env，填写 TYPESAFE_API_KEY
-npm run run
+npm start
 ```
 
-`npm run run` 会先编译，再通过 dotenv 加载本目录的 `.env`；终端已导出的同名变量优先。`.env` 已被 Git 忽略，提交时只保留 `.env.example`。
+`npm start` 会先编译，再通过 dotenv 加载本目录的 `.env`；终端已导出的同名变量优先。`.env` 已被 Git 忽略，提交时只保留 `.env.example`。
 
 预期标准输出为：
 
