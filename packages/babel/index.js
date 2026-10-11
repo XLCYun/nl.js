@@ -2,9 +2,9 @@ const template = require("@babel/template").default
 const { checkProgramVar } = require("./helpers/checkProgramVar")
 const { gatherScopeVars } = require("./helpers/gatherScopeVars")
 
-module.exports = function ({ types: t }) {
-  const buildRequireCore = template('var __NLJS_CORE = require("@nljs/core")', {
-    placeholderPattern: false
+module.exports = function ({ types: t }, options = {}) {
+  const buildRequireCore = template('var __NLJS_CORE = require(%%runtimeModule%%)', {
+    syntacticPlaceholders: true
   })
   const buildGlobalVar = template(`var __NLJS_GLOBAL = { sourceCode: %%sourceCode%%, vars: {} }`, {
     syntacticPlaceholders: true
@@ -38,7 +38,12 @@ module.exports = function ({ types: t }) {
 
         // If not found, add the require statement
         if (!hasRequire) {
-          const requireStatement = buildRequireCore()
+          const runtimeModule = t.stringLiteral(options.runtimeModule || "@nljs/core")
+          // The CLI supplies an installed runtime path and uses native imports
+          // for ESM. Babel consumers keep the original require-based default.
+          const requireStatement = options.runtimeImport
+            ? t.importDeclaration([t.importDefaultSpecifier(t.identifier("__NLJS_CORE"))], runtimeModule)
+            : buildRequireCore({ runtimeModule })
           // Add the require statement to the beginning of the file
           path.node.body.unshift(requireStatement)
         }
@@ -56,6 +61,15 @@ module.exports = function ({ types: t }) {
       TaggedTemplateExpression(path) {
         // Check if the tag is 'nl'
         if (t.isIdentifier(path.node.tag, { name: "nl" })) {
+          if (options.validateAsyncContext) {
+            const parentFunction = path.getFunctionParent()
+            const isAsync = parentFunction
+              ? parentFunction.node.async
+              : path.findParent(parent => parent.isProgram()).node.sourceType === "module"
+            if (!isAsync) {
+              throw path.buildCodeFrameError("nl fragments require an async function or the top level of an ES module")
+            }
+          }
           // Convert to eval( ... )
           path.replaceWith(buildEval({ 
             scope: gatherScopeVars(t, path),
