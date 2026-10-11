@@ -249,6 +249,47 @@ test('forwards terminal signals to the script so its handler can exit', { skip: 
   assert.equal(code, 23);
 });
 
+test('delivers terminal process-group SIGINT once to the script and its descendants', { skip: process.platform === 'win32' }, async (t) => {
+  const cwd = await fixture(t);
+  await writeFile(path.join(cwd, 'descendant.cjs'), [
+    'let count = 0;',
+    "process.on('SIGINT', () => { console.log('DESCENDANT_SIGNAL ' + ++count); setTimeout(() => process.exit(0), 120); });",
+    'setInterval(() => {}, 1000);',
+    "console.log('DESCENDANT_READY ' + process.pid);",
+  ].join('\n'));
+  await writeFile(path.join(cwd, 'signal.cjs'), [
+    "const { spawn } = require('node:child_process');",
+    "spawn(process.execPath, ['descendant.cjs'], { stdio: 'inherit' });",
+    'let count = 0;',
+    "process.on('SIGINT', () => { console.log('SCRIPT_SIGNAL ' + ++count); setTimeout(() => process.exit(0), 200); });",
+    "console.log('SCRIPT_READY ' + process.pid);",
+  ].join('\n'));
+  const child = spawn(process.execPath, [cli, 'signal.cjs'], {
+    cwd,
+    detached: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  t.after(() => {
+    const pids = [child.pid, ...Array.from(stdout.matchAll(/(?:SCRIPT|DESCENDANT)_READY (\d+)/g), (match) => Number(match[1]))];
+    for (const pid of pids) {
+      try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+  });
+  while (!stdout.includes('SCRIPT_READY') || !stdout.includes('DESCENDANT_READY')) {
+    await once(child.stdout, 'data', { signal: AbortSignal.timeout(10000) });
+  }
+  process.kill(-child.pid, 'SIGINT');
+  const [code, signal] = await once(child, 'close', { signal: AbortSignal.timeout(10000) });
+  assert.equal(code, 0, stderr);
+  assert.equal(signal, null);
+  assert.deepEqual(stdout.match(/SCRIPT_SIGNAL \d+/g), ['SCRIPT_SIGNAL 1']);
+  assert.deepEqual(stdout.match(/DESCENDANT_SIGNAL \d+/g), ['DESCENDANT_SIGNAL 1']);
+});
+
 test('maps execution failures to their source script and fragment locations', async (t) => {
   const cwd = await fixture(t);
   const service = await model(t, (request) => request.messages[1].content.includes('生成代码抛错')

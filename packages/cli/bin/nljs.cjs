@@ -39,12 +39,20 @@ if (Number(process.versions.node.split('.')[0]) < 24) {
 }
 
 const [script, ...args] = input;
-const child = spawn(process.execPath, [
+const nodeArgs = [
   '--enable-source-maps',
   '--import', pathToFileURL(path.join(__dirname, '../register.cjs')).href,
   path.resolve(script),
   ...args,
-], { stdio: 'inherit' });
+];
+// Replace this launcher on POSIX so the script keeps the foreground process
+// group, terminal, and native signals without a second recipient forwarding them.
+if (process.platform !== 'win32' && process.platform !== 'os400') {
+  process.execve(process.execPath, [process.execPath, ...nodeArgs], process.env);
+}
+
+// execve is unavailable on Windows and IBM i.
+const child = spawn(process.execPath, nodeArgs, { stdio: 'inherit' });
 const forwards = new Map(['SIGINT', 'SIGTERM', 'SIGHUP'].map((signal) => {
   const handler = () => child.kill(signal);
   process.on(signal, handler);
