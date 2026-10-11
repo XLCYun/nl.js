@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 
 .agents
 .claude
+
+# Local agent scratch files
+/.scratch/

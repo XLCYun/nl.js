@@ -1,6 +1,6 @@
 # 代码生成 Harness
 
-状态：已实现。实施与验证记录见[本地任务图](../../.scratch/code-generation-harness/map.md)。
+状态：已实现。实施与验证记录见 [PR #2](https://github.com/XLCYun/nl.js/pull/2)。
 
 ## 目的与边界
 
