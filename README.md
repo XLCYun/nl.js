@@ -12,18 +12,107 @@ async function main() {
 main();
 ```
 
-项目包含 Babel 插件、运行时和命令行示例。Babel 负责转换 `nl` 模板标签，运行时默认通过 OpenAI 兼容的 Chat Completions 接口生成 JavaScript，要求模型调用 `final_output` 工具提交异步函数体，再在调用位置执行。设置 `NLJS_PROVIDER=jev` 后，`nl` 片段改为通过 TypeSafe 的 Jev 模型判断条件，返回布尔值。
+项目包含 `nljs` 命令、Babel 插件和运行时。`nljs` 在加载脚本时自动转换 `nl` 模板标签，无需配置 Babel 或手动编译。运行时默认通过 OpenAI 兼容的 Chat Completions 接口生成 JavaScript，要求模型调用 `final_output` 工具提交异步函数体，再在调用位置执行。设置 `NLJS_PROVIDER=jev` 后，`nl` 片段改为通过 TypeSafe 的 Jev 模型判断条件，返回布尔值。
 
 ## 快速开始
 
-下面的命令使用 macOS / Linux 的 Bash 或 Zsh。本文在 Node.js 24、npm 11 环境核对构建流程；运行示例还需要模型服务的 API Key、接口地址和可用模型名称。
+`nljs` 需要 **Node.js 24 或更新版本**。下面的命令使用 macOS / Linux 的 Bash 或 Zsh，在 Node.js 24、npm 11 环境验证。运行自然语言片段还需要模型服务的 API Key、接口地址和可用模型名称。
+
+### 1. 从源码打包并安装 CLI
+
+当前 `@nljs/cli` 尚未发布到 npm，先从仓库生成 tarball，再安装：
+
+```bash
+git clone https://github.com/XLCYun/nl.js.git
+cd nl.js/packages/cli
+npm ci
+npm pack
+npm install --global ./nljs-cli-0.0.1.tgz
+
+nljs --version
+```
+
+`npm pack` 会自动构建，把本仓库的插件和运行时一起打进包。只需安装 `packages/cli` 的依赖，不需要分别安装 `packages/core` 或 `packages/babel`。生成的 tarball 可以复制到仓库之外安装；安装后 `nljs` 不依赖仓库目录。全局安装位置由 npm 配置决定，请确保其命令目录在 `PATH` 中。
+
+未来发布到 npm 后才可使用 `npx @nljs/cli hello.js`；现在请使用上面的 tarball 安装方式。
+
+### 2. 配置模型服务
+
+继续进入单脚本示例目录，并复制配置模板：
+
+```bash
+cd ../../examples/cli
+cp .env.example .env
+```
+
+在 `.env` 中填写支持工具调用的 OpenAI 兼容服务：
+
+```dotenv
+NLJS_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_BASE_URL=https://your-api-provider.example/v1
+OPENAI_MODEL=your-model-name
+DEBUG=false
+```
+
+Base URL 应包含服务要求的 API 基础路径，例如 `/v1`，不要填写完整的 `/chat/completions` 路径。服务必须支持 `final_output` 工具调用，详细要求见下文「配置与调试」。
+
+### 3. 直接运行 JS 脚本
+
+示例 [hello.js](examples/cli/hello.js) 不需要 `package.json`、Babel 配置，也不需要定义或导入 `nl`：
+
+```js
+async function main() {
+  const name = process.argv[2] || 'World';
+  const greeting = nl`返回字符串 "Hello, " + name + "!"`;
+  console.log(greeting);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+```
+
+在该目录运行：
+
+```bash
+nljs hello.js
+nljs hello.js "NL.js"
+```
+
+正常输出分别为 `Hello, World!` 和 `Hello, NL.js!`。也可以将这个脚本与 `.env` 复制到任意目录，再在那里运行同一命令。加载时的转换发生在内存中，不生成 `lib/` 等编译产物；模型请求在执行到自然语言片段时发生。
+
+### 命令、模块与运行目录
+
+```bash
+nljs --help
+nljs --version
+nljs "my script.js" "参数中可以有空格" --flag
+nljs -- -script.cjs
+```
+
+`nljs <script> [args...]` 将脚本路径之后的参数原样交给脚本，脚本从 `process.argv[2]` 开始读取。`--` 可以结束 CLI 选项，运行以 `-` 开头的文件名。帮助和版本命令无需模型配置。
+
+- 支持 `.js`、`.cjs`、`.mjs`，模块模式遵循 Node.js 的规则。`.cjs` 使用 CommonJS，`.mjs` 使用 ESM；`.js` 根据所在包的 `type` 和 Node.js 的模块识别规则加载。
+- 转换会在片段调用处插入 `await`。CommonJS 中的 `nl` 必须放在 `async` 函数内；ESM 可以在模块顶层使用，普通同步函数内仍需改为 `async`。例如将下方代码保存为 `sum.mjs` 后运行 `nljs sum.mjs`。
+- 本地 `require`、静态 `import` 和动态 `import()` 加载的 JS 模块也会转换；相对路径仍相对于当前模块解析。`node_modules` 中的依赖默认不转换。脚本自己的第三方依赖仍需安装在该项目中，CLI 只负责提供自身需要的插件和运行时。
+- CLI 读取**启动命令时当前工作目录**的 `.env`，不会切换到脚本目录；终端已导出的同名变量优先。比如从仓库根目录执行 `nljs examples/cli/hello.js`，读取的是根目录的 `.env`。文件操作使用的 `process.cwd()`、模块路径和入口身份保持 Node.js 的行为。
+- CLI 忽略用户的 Babel 配置，仅执行内置的 `nl` 转换；当前入口不支持 TypeScript 或 JSX。
+
+```js
+const numbers = [1, 2, 3, 4];
+const total = nl`返回 numbers 中所有数字的总和`;
+console.log(total);
+```
+
+## Babel 集成方式
+
+已有项目可以继续通过 Babel 插件编译后执行。以下流程从仓库根目录开始；与 `nljs` 的自动转换方式二选一即可。
 
 ### 1. 安装依赖
 
 ```bash
-git clone https://github.com/XLCYun/nl.js.git
-cd nl.js
-
 npm install --prefix packages/core
 npm install --prefix packages/babel
 
@@ -87,7 +176,13 @@ Hello, World!
 
 使用 `openai` 模式时，默认接口地址和默认模型名称分别来自 SDK 和本项目。请显式设置 `OPENAI_BASE_URL`、`OPENAI_MODEL`，确保它们属于同一个服务且支持 Chat Completions 工具调用，包括指定 `tool_choice` 和 `parallel_tool_calls: false`。本项目不要求服务支持 `strict: true`，工具参数由运行时校验；仅支持文本回复的模型无法用于此路径。
 
-在示例目录中开启调试：
+使用 CLI 时，在启动目录开启调试：
+
+```bash
+DEBUG=true nljs hello.js
+```
+
+使用 Babel 示例时，在对应示例目录开启调试：
 
 ```bash
 DEBUG=true npm start
@@ -95,7 +190,7 @@ DEBUG=true npm start
 
 OpenAI 路径在生成会话开始前输出 `prompt:`，每轮回复后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率、阈值 `threshold`、比较方式 `comparison` 和布尔结果。
 
-所有示例的 `npm start` 都通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
+Babel 示例的 `npm start` 通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`；`nljs` 则自动加载启动目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
 
 也可以从仓库根目录运行，npm 会在对应示例目录加载配置；`--` 后面的参数会原样传给示例：
 
@@ -127,7 +222,7 @@ sum(1, 2).then(console.log);
 
 ### 启用 Jev 布尔判断
 
-需要 Node.js 20 或更新版本，以及已获得访问资格的 TypeSafe 账户。先到 [TypeSafe Console](https://console.typesafe.ai/) 确认访问状态，再从 [API Keys](https://console.typesafe.ai/keys) 创建 key。官方 2026-09-15 公告仍将 Jev 描述为 early access，可能需要等待候补名单放行。[官方开通说明](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
+Jev 运行时需要 Node.js 20 或更新版本（使用 `nljs` 命令仍需 Node.js 24+），以及已获得访问资格的 TypeSafe 账户。先到 [TypeSafe Console](https://console.typesafe.ai/) 确认访问状态，再从 [API Keys](https://console.typesafe.ai/keys) 创建 key。官方 2026-09-15 公告仍将 Jev 描述为 early access，可能需要等待候补名单放行。[官方开通说明](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
 
 从仓库根目录运行新示例：
 
@@ -150,7 +245,7 @@ Jev Noul 返回条件成立的概率。设置 `NLJS_JEV_THRESHOLD=0.8` 后，运
 
 ## 示例
 
-所有示例都是命令行程序，位于 `examples/babel/`。运行一个新示例时，进入其目录安装依赖并填写 `.env`。例如，以下命令从仓库根目录运行：
+单脚本 CLI 示例位于 [examples/cli](examples/cli)，可按快速开始直接运行。下表列出的 Babel 示例位于 `examples/babel/`；运行一个新示例时，进入其目录安装依赖并填写 `.env`。例如，以下命令从仓库根目录运行：
 
 ```bash
 cd examples/babel/eightQueen
@@ -197,7 +292,7 @@ Q . . . . . . .
 2. **生成或判断**：运行到该位置时，`@nljs/core` 根据 `NLJS_PROVIDER` 选择路径。默认的 OpenAI 路径先检查代码缓存，未命中时由 Harness 维护对话，指定模型调用 `final_output` 工具，通过 `asyncFuncBody` 提交异步函数体；可修正的提交错误会反馈给模型，直到提交有效或达到轮数上限。Jev 路径将片段与当前上下文交给 Noul，按概率返回 `"true"` 或 `"false"` 常量表达式。
 3. **执行**：运行时校验工具提交，将函数体包装为异步立即执行函数表达式，并在原调用位置通过 `await eval(...)` 执行。生成代码可以读取或修改调用处可写的变量，也可以通过 `return` 提供片段结果。Jev 的布尔常量表达式沿用同一调用位置执行。
 
-编译本身不调用模型。`lib/index.js` 包含运行时生成代码的调用，模型生成的代码不会写回这个文件。
+编译本身不调用模型。`nljs` 在加载模块时自动完成转换，无需写出编译文件；Babel 示例会将转换结果写入 `lib/index.js`。模型生成的代码不会写回源码或编译产物。
 
 ### 模型输出约定
 
@@ -260,14 +355,14 @@ main().catch(console.error);
 | 生命周期 | 进程退出后清空，不会跨次运行保存到磁盘 |
 | 启用方式 | 默认开启，无需设置环境变量 |
 
-因此，相同文本出现在不同源码位置时会分别缓存。需要每轮根据新状态重新生成代码的场景，可以通过运行时 API 关闭缓存：
+因此，相同文本出现在不同源码位置时会分别缓存。需要每轮根据新状态重新生成代码时，可以关闭缓存。使用 Babel 集成且已安装 `@nljs/core` 的项目可以直接调用运行时 API：
 
 ```js
 const { disableCodeCache } = require('@nljs/core');
 disableCodeCache();
 ```
 
-`metaAgent` 和 `react` 示例已经通过插件注入的运行时对象关闭缓存：
+使用 `nljs` 时，在含 `nl` 的源码文件中通过注入的运行时对象关闭缓存，无需另外安装或导入 `@nljs/core`。`metaAgent` 和 `react` 示例也使用这种方式；调用应放在片段执行之前：
 
 ```js
 __NLJS_CORE.disableCodeCache();
@@ -281,7 +376,13 @@ __NLJS_CORE.disableCodeCache();
 
 ### `nl is not defined` 或 `__NLJS_CORE is not defined`
 
-通常是直接执行了未编译的源码。进入示例目录，先编译，再运行产物：
+通常是用 `node` 直接执行了含 `nl` 的源码。单脚本使用 CLI 运行：
+
+```bash
+nljs hello.js
+```
+
+已有 Babel 示例则进入其目录，先编译，再运行产物：
 
 ```bash
 npm start
@@ -301,7 +402,7 @@ npm start
 
 ### 找不到 `@nljs/core`、`openai` 或 `@babel/template`
 
-需要分别安装本地包和所运行示例的依赖。以下命令从仓库根目录运行，以 `helloWorld` 为例：
+使用 Babel 集成时，需要分别安装本地包和所运行示例的依赖。以下命令从仓库根目录运行，以 `helloWorld` 为例：
 
 ```bash
 npm install --prefix packages/core
@@ -309,9 +410,11 @@ npm install --prefix packages/babel
 npm install --prefix examples/babel/helloWorld
 ```
 
+`nljs` 的 tarball 自带插件和运行时，用户脚本无需导入 `@nljs/core`；若使用 CLI 时缺少它自身的依赖，请按快速开始重新打包并安装。
+
 ### 修改了配置，但运行时没有变化
 
-确认 `.env` 位于当前示例目录，且已填写 Key、Base URL 和模型名；用 `npm start` 自动加载。终端已导出的同名变量优先于 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。
+使用 CLI 时确认 `.env` 位于启动命令的当前目录；Babel 示例则放在示例目录，用 `npm start` 自动加载。确认已填写 Key、Base URL 和模型名。终端已导出的同名变量优先于 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。
 
 ### 输出为空、返回 `undefined` 或生成代码执行失败
 
@@ -321,10 +424,12 @@ npm install --prefix examples/babel/helloWorld
 
 ```text
 packages/
+  cli/                 nljs 命令、加载时转换与独立 tarball 分发
   babel/               Babel 插件与 Jest 测试
     helpers/           作用域变量收集、注入检查
   core/                生成会话 Harness、上下文组装、Jev 判断与缓存
 examples/
+  cli/                 无需 package.json 或 Babel 配置的单脚本示例
   babel/               各自独立安装、编译和运行的命令行示例
 ```
 
@@ -333,9 +438,12 @@ examples/
 ```bash
 npm test --prefix packages/core
 npm test --prefix packages/babel -- --runInBand
+npm test --prefix packages/cli
 ```
 
 测试覆盖插件转换、作用域变量收集、`final_output` 请求与多轮修正、轮数配置及会话隔离、异步函数体执行、失败不缓存、provider 切换、Jev 概率转换和缓存隔离。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口；这些测试不证明真实模型的生成质量。
+
+CLI 集成测试从 `nljs` 命令验证 CommonJS/ESM、本地模块、参数和路径、`.env`、错误定位、退出状态、终端信号，以及离开仓库后的 tarball 安装。模型调用使用本地 HTTP 模拟服务。
 
 当前实现的边界：
 
