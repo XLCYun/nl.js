@@ -93,7 +93,7 @@ Hello, World!
 DEBUG=true npm start
 ```
 
-OpenAI 路径在请求前输出 `prompt:`，返回后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率、阈值 `threshold`、比较方式 `comparison` 和布尔结果。
+OpenAI 路径在生成会话开始前输出 `prompt:`，每轮回复后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率、阈值 `threshold`、比较方式 `comparison` 和布尔结果。
 
 所有示例的 `npm start` 都通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
 
@@ -104,6 +104,26 @@ npm start --prefix examples/babel/computer -- "计算 123 加 456"
 ```
 
 终端已导出的同名环境变量优先于 `.env`，因此可以用 `DEBUG=true npm start` 临时开启日志。切换 provider 时也要留意终端里的 `NLJS_PROVIDER`。直接运行编译产物时，使用 `node -r dotenv/config lib/index.js` 加载配置。
+
+### 设置代码生成轮数
+
+OpenAI 代码生成由 Harness 维护多轮对话。默认最多请求模型 **10 轮，包含首轮**；模型漏调用 `final_output` 或提交格式有误时，会收到反馈并在剩余轮次内修正。有效提交立即结束，不再请求总结。
+
+在含 `nl` 的源码文件中，为 Babel 注入的对象赋值即可调整上限：
+
+```js
+__NLJS_GLOBAL.maxRounds = 3;
+
+async function sum(a, b) {
+  return nl`返回 a + b`;
+}
+
+sum(1, 2).then(console.log);
+```
+
+赋值须在片段执行前完成，不要重新声明或整体替换 `__NLJS_GLOBAL`。该对象属于当前编译文件，在现有 Node/CommonJS 用法下不会影响其他文件，也不是 `globalThis`。这项配置不通过 `.env` 设置。
+
+`maxRounds` 必须是正的安全整数；字符串、`null`、零、负数和小数等无效值会在请求前报错。未设置或值为 `undefined` 时使用默认值 10。每次 OpenAI 缓存未命中后读取一次配置，并固定当前会话的模型、上下文和轮数上限；修改配置影响下一次新生成。缓存命中和 Jev 路径不读取或校验 `maxRounds`，SDK 自身的 HTTP 重试不计为新一轮。
 
 ### 启用 Jev 布尔判断
 
@@ -174,7 +194,7 @@ Q . . . . . . .
 ## 工作原理
 
 1. **编译**：`@nljs/babel` 找到 `nl` 模板标签，注入 `@nljs/core`，记录原始源码、片段位置和可收集的作用域变量，将标签转换为包含 `await` 的生成与执行调用。
-2. **生成或判断**：运行到该位置时，`@nljs/core` 根据 `NLJS_PROVIDER` 选择路径。默认的 OpenAI 路径先检查代码缓存，未命中时指定模型调用 `final_output` 工具，通过 `asyncFuncBody` 提交异步函数体；Jev 路径将片段与当前上下文交给 Noul，按概率返回 `"true"` 或 `"false"` 常量表达式。
+2. **生成或判断**：运行到该位置时，`@nljs/core` 根据 `NLJS_PROVIDER` 选择路径。默认的 OpenAI 路径先检查代码缓存，未命中时由 Harness 维护对话，指定模型调用 `final_output` 工具，通过 `asyncFuncBody` 提交异步函数体；可修正的提交错误会反馈给模型，直到提交有效或达到轮数上限。Jev 路径将片段与当前上下文交给 Noul，按概率返回 `"true"` 或 `"false"` 常量表达式。
 3. **执行**：运行时校验工具提交，将函数体包装为异步立即执行函数表达式，并在原调用位置通过 `await eval(...)` 执行。生成代码可以读取或修改调用处可写的变量，也可以通过 `return` 提供片段结果。Jev 的布尔常量表达式沿用同一调用位置执行。
 
 编译本身不调用模型。`lib/index.js` 包含运行时生成代码的调用，模型生成的代码不会写回这个文件。
@@ -187,11 +207,21 @@ Q . . . . . . .
 {"asyncFuncBody":"return a + b;"}
 ```
 
-Chat Completions 响应中的 `tool_calls[0].function.arguments` 是这个对象的 JSON 字符串。运行时要求响应以 `finish_reason: "tool_calls"` 结束，且只有一次 `final_output` 函数工具调用；提交内容只包含函数体，可以使用 `return` 和 `await`，不包含外层函数定义。
+Chat Completions 响应中的 `tool_calls[0].function.arguments` 是这个对象的 JSON 字符串。有效提交要求该轮响应以 `finish_reason: "tool_calls"` 结束，且只有一次 `final_output` 函数工具调用；提交内容只包含函数体，可以使用 `return` 和 `await`，不包含外层函数定义。每轮仍强制指定 `final_output`，并关闭并行工具调用。
 
-模型通过工具提交后，本次生成结束，无需再请求一轮模型。缺少调用、多个调用、模型拒绝、响应截断或参数无效时直接报错，不读取普通正文或旧的 `<nl>...</nl>` 输出补救，也不会发起额外的模型纠错请求或写入代码缓存。显式提交空函数体是有效的，其片段结果为 `undefined`。参数格式校验不等于 JavaScript 语法或行为校验。
+Harness 保留每轮 assistant 回复，并根据问题继续或终止：
 
-完整协议及设计选择见 [final_output 设计记录](docs/design/final-output-tool.md)。
+| 响应情况 | 处理 |
+| --- | --- |
+| 正常结束但没有工具调用 | 追加 user 提醒，要求调用 `final_output` |
+| 完整调用包含无效 JSON、错误字段或未知工具名 | 按调用 ID 回填 tool 错误，要求修正 |
+| 同轮多个完整调用，ID 非空且互不重复 | 本轮均不采用，逐个 ID 回填 tool 错误，要求下一轮提交一份 |
+| 拒绝、内容过滤、截断或损坏响应 | 立即报错；缺失、空白或重复的调用 ID 等无法合法续写的情况属于损坏响应 |
+| 达到轮数上限仍未提交成功 | 报错并保留最后一次提交错误，不再请求模型 |
+
+有效提交立即结束本次生成，无需再请求一轮模型。普通正文和旧的 `<nl>...</nl>` 不用于提取代码。生成阶段失败不写缓存；有效函数体仍按原路径包装、缓存，再在调用处 eval 执行。显式提交空函数体有效，其片段结果为 `undefined`。提交校验不保证 JavaScript 语法或行为正确，执行错误不交回 Harness 修正。
+
+完整协议及模块职责见 [final_output 设计记录](docs/design/final-output-tool.md)和[代码生成 Harness](docs/design/code-generation-harness.md)。
 
 ### 编写自己的示例
 
@@ -259,15 +289,15 @@ npm start
 
 如果日志中的源码和当前 `index.js` 不一致，也需要重新编译，更新旧的 `lib/index.js`。
 
-### `代码生成失败: 模型响应必须以 final_output 工具调用结束`
+### `代码生成失败: 达到代码生成轮数上限 ...`
 
-开启 `DEBUG=true`，检查完整响应中的 `choices[0].finish_reason` 和 `choices[0].message.tool_calls`。服务返回普通文本、缺少 `choices`、响应被截断或内容被过滤时，都不能作为有效的代码提交。
+开启 `DEBUG=true`，检查每轮响应中的 `choices[0].finish_reason` 和 `choices[0].message.tool_calls`，以及错误中保留的最后一次失败原因。正常文字回复会收到工具调用提醒，错误参数会收到修正反馈；如果始终没有有效提交，就会耗尽轮数。缺少 `choices`、响应被截断、拒绝或内容被过滤时会立即失败。
 
 确认 Base URL 包含正确的 API 基础路径，并确认模型与服务支持指定 `final_output` 工具调用。若服务返回不支持 `tools`、`tool_choice` 或 `parallel_tool_calls` 的错误，需要改用支持这些能力的模型或服务；运行时不会降级为文本生成。
 
 ### `final_output` 参数错误
 
-`function.arguments` 必须是合法的 JSON 字符串，解析后是只含 `asyncFuncBody` 字符串字段的对象。字段缺失、值为 `null` 或其他非字符串类型、额外字段，以及嵌套成 `output.asyncFuncBody` 都会被拒绝。错误会保留原始异常作为 `cause`，失败提交不会写入代码缓存。
+`function.arguments` 必须是 JSON 字符串，解析后是只含 `asyncFuncBody` 字符串字段的对象。字符串中的 JSON 无效、字段缺失、值为 `null` 或其他非字符串类型、额外字段，以及嵌套成 `output.asyncFuncBody` 都会反馈给模型修正；若 `arguments` 本身不是字符串，则属于损坏响应并立即失败。达到轮数上限仍未修正时，错误会保留最后一次失败原因及 `cause`，不会写入代码缓存。
 
 ### 找不到 `@nljs/core`、`openai` 或 `@babel/template`
 
@@ -293,7 +323,7 @@ npm install --prefix examples/babel/helloWorld
 packages/
   babel/               Babel 插件与 Jest 测试
     helpers/           作用域变量收集、注入检查
-  core/                模型请求、上下文组装、代码解析与缓存
+  core/                生成会话 Harness、上下文组装、Jev 判断与缓存
 examples/
   babel/               各自独立安装、编译和运行的命令行示例
 ```
@@ -305,7 +335,7 @@ npm test --prefix packages/core
 npm test --prefix packages/babel -- --runInBand
 ```
 
-测试覆盖插件转换、作用域变量收集、`final_output` 请求与参数校验、异步函数体执行、无效提交不缓存、provider 切换、Jev 概率转换和缓存隔离。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口。
+测试覆盖插件转换、作用域变量收集、`final_output` 请求与多轮修正、轮数配置及会话隔离、异步函数体执行、失败不缓存、provider 切换、Jev 概率转换和缓存隔离。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口；这些测试不证明真实模型的生成质量。
 
 当前实现的边界：
 
