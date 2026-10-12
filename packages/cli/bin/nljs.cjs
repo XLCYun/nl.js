@@ -6,7 +6,7 @@ const { pathToFileURL } = require('node:url');
 const usage = `Usage: nljs <script> [args...]
 
 Run JavaScript containing nl\`\` fragments without Babel configuration.
-Loads .env from the current directory; exported variables take precedence.
+Uses inherited environment variables; does not load .env files.
 Requires Node.js 24 or later. CommonJS fragments belong in async functions.
 
 Options:

@@ -116,7 +116,7 @@ test('runs ESM top-level fragments and fragments in imported local modules', asy
   assert.deepEqual(JSON.parse(result.stdout), { result: 10, main: true });
 });
 
-test('loads .env from the launch directory and preserves exported configuration', async (t) => {
+test('uses only inherited configuration and leaves .env files unloaded', async (t) => {
   const cwd = await fixture(t);
   const service = await model(t, 'return 42;');
   await mkdir(path.join(cwd, 'scripts'));
@@ -125,16 +125,27 @@ test('loads .env from the launch directory and preserves exported configuration'
     `OPENAI_BASE_URL=${service.env.OPENAI_BASE_URL}`,
     'OPENAI_MODEL=dotenv-model',
     'NLJS_PROVIDER=openai',
+    'NLJS_CWD_FILE_ONLY=from-cwd-file',
   ].join('\n'));
-  await writeFile(path.join(cwd, 'scripts/.env'), 'OPENAI_MODEL=wrong-directory');
-  await writeFile(path.join(cwd, 'scripts/script.cjs'), 'async function main() { console.log(nl`给出答案`); }\nmain();');
+  await writeFile(path.join(cwd, 'scripts/.env'), 'NLJS_SCRIPT_FILE_ONLY=from-script-file');
+  await writeFile(path.join(cwd, 'scripts/script.cjs'), [
+    'async function main() {',
+    '  const result = nl`给出答案`;',
+    '  console.log(JSON.stringify({',
+    '    result,',
+    '    cwdOnly: process.env.NLJS_CWD_FILE_ONLY ?? null,',
+    '    scriptOnly: process.env.NLJS_SCRIPT_FILE_ONLY ?? null,',
+    '  }));',
+    '}',
+    'main();',
+  ].join('\n'));
 
-  const result = await run(['scripts/script.cjs'], { cwd, env: { OPENAI_MODEL: 'exported-model' } });
+  const result = await run(['scripts/script.cjs'], { cwd, env: service.env });
 
   assert.equal(result.code, 0, result.stderr);
-  assert.equal(result.stdout.trim(), '42');
-  assert.equal(service.requests[0].headers.authorization, 'Bearer dotenv-key');
-  assert.equal(service.requests[0].body.model, 'exported-model');
+  assert.deepEqual(JSON.parse(result.stdout), { result: 42, cwdOnly: null, scriptOnly: null });
+  assert.equal(service.requests[0].headers.authorization, 'Bearer test-key');
+  assert.equal(service.requests[0].body.model, 'test-model');
 });
 
 test('describes the command and its version without model configuration', async (t) => {

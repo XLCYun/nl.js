@@ -6,12 +6,6 @@ const plugin = require('./dist/vendor/babel');
 
 const runtimeModule = require.resolve('./dist/vendor/core');
 
-try {
-  process.loadEnvFile(path.resolve('.env'));
-} catch (error) {
-  if (error.code !== 'ENOENT') throw error;
-}
-
 registerHooks({
   load(url, context, nextLoad) {
     const result = nextLoad(url, context);

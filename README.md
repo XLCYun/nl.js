@@ -38,22 +38,18 @@ nljs --version
 
 ### 2. 配置模型服务
 
-继续进入单脚本示例目录，并复制配置模板：
+继续进入单脚本示例目录，并在当前终端导出模型配置：
 
 ```bash
 cd ../../examples/cli
-cp .env.example .env
+export NLJS_PROVIDER=openai
+export OPENAI_API_KEY='your-api-key'
+export OPENAI_BASE_URL='https://your-api-provider.example/v1'
+export OPENAI_MODEL='your-model-name'
+export DEBUG=false
 ```
 
-在 `.env` 中填写支持工具调用的 OpenAI 兼容服务：
-
-```dotenv
-NLJS_PROVIDER=openai
-OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=https://your-api-provider.example/v1
-OPENAI_MODEL=your-model-name
-DEBUG=false
-```
+`nljs` 继承调用方的环境变量，运行时从 `process.env` 读取配置，不会主动加载 `.env`。如需用配置文件管理环境，可以参考可选的 [.env.example](examples/cli/.env.example)，由调用方的环境管理工具在启动前显式加载。
 
 Base URL 应包含服务要求的 API 基础路径，例如 `/v1`，不要填写完整的 `/chat/completions` 路径。服务必须支持 `final_output` 工具调用，详细要求见下文「配置与调试」。
 
@@ -81,7 +77,7 @@ nljs hello.js
 nljs hello.js "NL.js"
 ```
 
-正常输出分别为 `Hello, World!` 和 `Hello, NL.js!`。也可以将这个脚本与 `.env` 复制到任意目录，再在那里运行同一命令。加载时的转换发生在内存中，不生成 `lib/` 等编译产物；模型请求在执行到自然语言片段时发生。
+正常输出分别为 `Hello, World!` 和 `Hello, NL.js!`。也可以将这个脚本复制到任意目录，在已设置上述环境变量的终端中运行同一命令。加载时的转换发生在内存中，不生成 `lib/` 等编译产物；模型请求在执行到自然语言片段时发生。
 
 ### 命令、模块与运行目录
 
@@ -97,7 +93,7 @@ nljs -- -script.cjs
 - 支持 `.js`、`.cjs`、`.mjs`，模块模式遵循 Node.js 的规则。`.cjs` 使用 CommonJS，`.mjs` 使用 ESM；`.js` 根据所在包的 `type` 和 Node.js 的模块识别规则加载。
 - 转换会在片段调用处插入 `await`。CommonJS 中的 `nl` 必须放在 `async` 函数内；ESM 可以在模块顶层使用，普通同步函数内仍需改为 `async`。例如将下方代码保存为 `sum.mjs` 后运行 `nljs sum.mjs`。
 - 本地 `require`、静态 `import` 和动态 `import()` 加载的 JS 模块也会转换；相对路径仍相对于当前模块解析。`node_modules` 中的依赖默认不转换。脚本自己的第三方依赖仍需安装在该项目中，CLI 只负责提供自身需要的插件和运行时。
-- CLI 读取**启动命令时当前工作目录**的 `.env`，不会切换到脚本目录；终端已导出的同名变量优先。比如从仓库根目录执行 `nljs examples/cli/hello.js`，读取的是根目录的 `.env`。文件操作使用的 `process.cwd()`、模块路径和入口身份保持 Node.js 的行为。
+- CLI 继承调用方的 `process.env`，不主动加载当前工作目录或脚本目录中的 `.env`，也不会切换到脚本目录。文件操作使用的 `process.cwd()`、模块路径和入口身份保持 Node.js 的行为。
 - CLI 忽略用户的 Babel 配置，仅执行内置的 `nl` 转换；当前入口不支持 TypeScript 或 JSX。
 
 ```js
@@ -160,7 +156,7 @@ Hello, World!
 
 ## 配置与调试
 
-运行时读取以下环境变量：
+运行时直接从 `process.env` 读取以下环境变量：
 
 | 变量 | 用途 | 未设置时的行为 |
 | --- | --- | --- |
@@ -190,7 +186,7 @@ DEBUG=true npm start
 
 OpenAI 路径在生成会话开始前输出 `prompt:`，每轮回复后以完整 JSON 输出 `response from LLM`，其中包含 `finish_reason` 和 `tool_calls`；校验通过后输出 `generated code`。命中代码缓存时会输出 `cached code found`。Jev 路径在请求前输出 `jev request:`，以完整 JSON 展示模型名、`question`、`scope`、拼接后的完整源码 `context` 和判断问题 `questions`。源码中用 `<nl-judge>...</nl-judge>` 包裹问题或条件文本，去掉外层 `nl` 标签和模板反引号，例如 `<nl-judge>1 > 0</nl-judge>`；`state.question` 中也保留同一份文本。`questions.result.instructions` 直接以问题原文开头，再说明源码标记的位置，并以 `scope` 为当前运行时变量值。`question` 是本项目自定义的状态字段名，TypeSafe 实际读取的问题位于 `instructions`。返回后输出 `jev judgment:`，包含实际模型版本、原始概率、阈值 `threshold`、比较方式 `comparison` 和布尔结果。
 
-Babel 示例的 `npm start` 通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`；`nljs` 则自动加载启动目录下的 `.env`。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
+Babel 示例的 `npm start` 通过 [dotenv](https://github.com/motdotla/dotenv) 自动加载本示例目录下的 `.env`。CLI `nljs` 仅继承启动进程的环境，不主动加载配置文件。`.env` 和 `.env.*` 已被 Git 忽略，`.env.example` 保留在版本控制中。
 
 也可以从仓库根目录运行，npm 会在对应示例目录加载配置；`--` 后面的参数会原样传给示例：
 
@@ -198,7 +194,7 @@ Babel 示例的 `npm start` 通过 [dotenv](https://github.com/motdotla/dotenv) 
 npm start --prefix examples/babel/computer -- "计算 123 加 456"
 ```
 
-终端已导出的同名环境变量优先于 `.env`，因此可以用 `DEBUG=true npm start` 临时开启日志。切换 provider 时也要留意终端里的 `NLJS_PROVIDER`。直接运行编译产物时，使用 `node -r dotenv/config lib/index.js` 加载配置。
+Babel 示例中，终端已导出的同名环境变量优先于 `.env`，因此可以用 `DEBUG=true npm start` 临时开启日志。切换 provider 时也要留意终端里的 `NLJS_PROVIDER`。直接运行编译产物时，使用 `node -r dotenv/config lib/index.js` 加载配置。
 
 ### 设置代码生成轮数
 
@@ -414,7 +410,9 @@ npm install --prefix examples/babel/helloWorld
 
 ### 修改了配置，但运行时没有变化
 
-使用 CLI 时确认 `.env` 位于启动命令的当前目录；Babel 示例则放在示例目录，用 `npm start` 自动加载。确认已填写 Key、Base URL 和模型名。终端已导出的同名变量优先于 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。
+使用 CLI 时，确认启动进程的环境中已设置 Key、Base URL 和模型名，例如使用快速开始中的 `export` 命令。仅创建或修改 `.env` 不会改变 `nljs` 的配置；使用外部环境管理工具时，由调用方显式加载后再启动。
+
+Babel 示例仍在示例目录中用 `npm start` 自动加载 `.env`。终端已导出的同名变量优先于这些示例的 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。
 
 ### 输出为空、返回 `undefined` 或生成代码执行失败
 
@@ -443,7 +441,7 @@ npm test --prefix packages/cli
 
 测试覆盖插件转换、作用域变量收集、`final_output` 请求与多轮修正、轮数配置及会话隔离、异步函数体执行、失败不缓存、provider 切换、Jev 概率转换和缓存隔离。运行时测试使用模拟 HTTP 响应，不需要真实 API Key，也不调用外部模型接口；这些测试不证明真实模型的生成质量。
 
-CLI 集成测试从 `nljs` 命令验证 CommonJS/ESM、本地模块、参数和路径、`.env`、错误定位、退出状态、终端信号，以及离开仓库后的 tarball 安装。模型调用使用本地 HTTP 模拟服务。
+CLI 集成测试从 `nljs` 命令验证 CommonJS/ESM、本地模块、参数和路径、环境变量继承与 `.env` 不自动加载、错误定位、退出状态、终端信号，以及离开仓库后的 tarball 安装。模型调用使用本地 HTTP 模拟服务。
 
 当前实现的边界：
 
