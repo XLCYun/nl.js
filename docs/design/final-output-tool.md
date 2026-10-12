@@ -77,7 +77,7 @@
 
 代码生成提示词用 `/* __NLJS_ASYNC_FUNC_BODY__ */` 标出待填函数体，要求最终通过工具提交，说明 `return` 和 `await` 的用法。原始源码、变量当前值和自然语言片段仍作为上下文提供。Jev 继续使用原有 `<nl-judge>` 标记。
 
-服务端 `strict` 控制 JSON Schema 遵循性，不验证字符串内部的 JavaScript。任意 `OPENAI_BASE_URL` 是否支持请求参数需要由服务决定；不支持工具调用的服务不能满足本次要求。
+服务端 `strict` 控制 JSON Schema 遵循性，不验证字符串内部的 JavaScript。`globalThis.__NLJS_GLOBAL.baseURL` 指向的服务是否支持请求参数，需要由该服务决定；不支持工具调用的服务不能满足本次要求。
 
 ## 多轮修正与终止
 
@@ -93,16 +93,16 @@
 | arguments 本身不是字符串，或调用 ID 缺失、空白、重复 | 无法合法续写，立即失败 |
 | 唯一有效提交 | 返回函数体，立即结束会话，不追加模型请求 |
 
-默认上限是 10 轮，包含首轮。通过当前编译文件中的 `__NLJS_GLOBAL.maxRounds` 赋值调整，值必须为正的安全整数；不通过环境变量配置。OpenAI 缓存未命中时读取一次并固定当前会话，Jev 与缓存命中不读取或校验它。完整用法见 [Harness 轮数配置](code-generation-harness.md#轮数配置)。
+默认上限是 10 轮，包含首轮。通过共享配置 `globalThis.__NLJS_GLOBAL.maxRounds` 调整，值必须为正的安全整数；运行时不读取环境变量。每次调用在异步请求前固定配置，OpenAI 缓存未命中时校验并使用本次轮数，Jev 与缓存命中不使用或校验它。后续配置修改不改变已开始的会话；更换模型也不会强制已有片段绕过代码缓存。Babel 注入的 `__NLJS_MODULE` 只保留各文件独立的源码和变量上下文。完整用法见 [Harness 轮数配置](code-generation-harness.md#轮数配置)。
 
 耗尽轮数时抛出包含最后一次失败原因的 `代码生成失败`，保留 `cause`。可修正的提交不写缓存，终止的生成会话也不写缓存；只有有效函数体进入既有包装和缓存路径。代码的 JavaScript 语法或执行错误继续在调用处暴露，不触发模型修正。OpenAI SDK 自身的 HTTP 重试策略保持默认，不计入会话轮次；Harness 不额外重试网络失败。
 
 ## 验证
 
-- `npm test --prefix packages/core`：70 项通过。通过公开生成入口、真实 SDK 和模拟 HTTP 验证请求结构、工具提交、多轮修正、配置与会话隔离、失败不缓存，并覆盖 `await`、调用处变量读写、缓存复用、字符串转义、尾部注释和显式空函数体。
+- `npm test --prefix packages/core`：通过公开 `generate({ module, scope, source })` 入口、真实 SDK 和模拟 HTTP 验证请求结构、工具提交、多轮修正、共享配置与会话快照、失败不缓存，并覆盖 `await`、调用处变量读写、缓存复用、字符串转义、尾部注释和显式空函数体。
 - 默认第 10 轮可成功；耗尽轮数后没有第 11 次模型请求。可修正错误按消息顺序继续，损坏响应与拒绝、截断、过滤立即失败。
-- `npm test --prefix packages/babel -- --runInBand`：19 项通过，插件转换保持原样。
-- 实际 Babel 编译后，通过模拟 HTTP 验证文件级轮数赋值、修正后 eval 执行和现有缓存路径。
+- `npm test --prefix packages/babel -- --runInBand`：验证片段转换、独立 `__NLJS_MODULE` 上下文和共享配置不自动进入模型作用域。
+- 实际 Babel 编译后，通过模拟 HTTP 验证全局轮数配置、修正后 eval 执行和现有缓存路径。
 
 真实模型兼容性与生成质量不由模拟测试证明。
 

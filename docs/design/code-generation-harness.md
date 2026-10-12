@@ -2,6 +2,8 @@
 
 状态：已实现。实施与验证记录见 [PR #2](https://github.com/XLCYun/nl.js/pull/2)。
 
+配置接口已随 [共享全局配置规格 #3](https://github.com/XLCYun/nl.js/issues/3) 更新；下文描述当前接口。
+
 ## 目的与边界
 
 一次模型回复结束，不等于代码生成会话完成。Harness 在 core 中维护多轮 messages：漏调用时提醒，提交格式错误时反馈原因，直到模型通过 `final_output({ asyncFuncBody: string })` 交付一份有效函数体，或会话终止。
@@ -12,10 +14,10 @@ Harness 只接管 OpenAI 代码生成会话。Jev 判断、代码缓存、函数
 
 ## 轮数配置
 
-轮数通过 Babel 注入的 `__NLJS_GLOBAL` 配置，不使用环境变量。将赋值放在当前文件的自然语言片段执行之前：
+轮数通过真正共享的 `globalThis.__NLJS_GLOBAL.maxRounds` 配置，运行时不读取环境变量。按 [README](../../README.md#配置与调试) 完成模型配置后，在自然语言片段执行之前调整：
 
 ```js
-__NLJS_GLOBAL.maxRounds = 10;
+globalThis.__NLJS_GLOBAL.maxRounds = 10;
 
 async function sum(a, b) {
   return nl`返回 a + b`;
@@ -24,14 +26,14 @@ async function sum(a, b) {
 sum(1, 2).then(console.log);
 ```
 
-向既有对象赋属性，不重新声明或整体替换 `__NLJS_GLOBAL`。Babel 在每个含 `nl` 的文件中注入这个对象，并传入 `generate({ global: __NLJS_GLOBAL, ... })`。它在当前 Node/CommonJS 用法下属于当前编译文件，不是进程的 `globalThis`；配置不会自动影响其他文件。
+同一 JavaScript 全局环境的 CJS/ESM 模块共享配置对象；运行时保留调用方已提供的对象。可以修改字段或整体替换对象，后续调用会读取新配置，已经开始的会话继续使用自己的快照。Babel 另为每个含 `nl` 的文件注入 `__NLJS_MODULE`，通过 `generate({ module: __NLJS_MODULE, ... })` 传递独立的源码和变量上下文；模块对象不承担配置。
 
 配置契约：
 
-- 未设置 `maxRounds` 或值为 `undefined` 时默认 10，首轮也计入上限。直接调用 `generate()` 时省略 `global` 或传入 `null` 也使用默认值。
+- 未设置 `maxRounds` 或值为 `undefined` 时默认 10，首轮也计入上限。全局配置对象不存在时会初始化为空对象；显式将整个对象设为 `null` 属于非法配置。
 - 配置值是大于零的安全整数；字符串、`null`、零、负数、小数及非有限数无效。
-- 在 OpenAI 缓存未命中时读取；非法值在请求模型前报错。Jev 与缓存命中不读取这个生成配置。
-- 每次新生成读取一次并固定为本次会话的上限，运行中的会话不跟随对象后续修改。
+- 每次调用先固定配置快照；OpenAI 缓存未命中时校验轮数，非法值在请求模型前报错。Jev 与缓存命中不使用或校验这个生成配置。
+- 模型、key、地址、日志和轮数等设置在本次异步请求前固定，运行中的会话不跟随对象后续修改。OpenAI 命中缓存仍复用生成代码；修改模型不会强制重新生成。
 - SDK 自身的 HTTP 重试不作为新的会话轮次。
 
 ## 主循环与结束条件
@@ -76,7 +78,7 @@ sum(1, 2).then(console.log);
 
 ## 模块职责
 
-- [core/index.js](../../packages/core/index.js) 的 `generate()` 处理 provider 分流、上下文构造、缓存检查、配置快照、函数体包装和成功后的缓存写入。
+- [core/config.js](../../packages/core/config.js) 初始化共享对象并为每次调用取得配置快照，校验请求配置；[core/index.js](../../packages/core/index.js) 的 `generate()` 处理 provider 分流、上下文构造、缓存检查、函数体包装和成功后的缓存写入。
 - [core/harness.js](../../packages/core/harness.js) 的内部 `runCodeGeneration()` 维护本次调用专用的 messages、轮数、工具定义、响应分类、参数校验及错误反馈，成功返回 `asyncFuncBody`。
 - 每个自然语言片段的每次生成拥有独立消息历史；并发生成不共用对话，已有的 scope 与源码上下文不在轮次之间重新采集。
 - 不新增公共调用方法，不在 Harness 内执行生成代码；Babel / eval 与 Jev 保持现有职责。
@@ -85,16 +87,16 @@ sum(1, 2).then(console.log);
 
 ## 验证
 
-运行时通过公开 `generate({ global, scope, source })`、真实 SDK 和模拟 HTTP 响应验证，core 73 项与 Babel 19 项测试通过。测试没有请求真实模型，也不证明真实模型兼容性或生成质量。
+运行时通过公开 `generate({ module, scope, source })`、真实 SDK 和模拟 HTTP 响应验证。测试没有请求真实模型，也不证明真实模型兼容性或生成质量。
 
 - 首轮有效提交即结束，保留空函数体、正文不参与提取、函数体原文与现有执行行为。
 - 漏调用后提醒，参数错误后按原工具 ID 回填错误，再提交成功。
 - 多轮消息顺序与内容保留；未知工具可修正，同轮多个调用逐一反馈，损坏响应直接失败。
 - 默认上限为 10；第 10 轮成功与第 10 轮仍失败分别验证，没有第 11 次模型调用。
-- `__NLJS_GLOBAL.maxRounds` 覆盖默认值，非法配置不发请求；当前会话使用快照，不同调用彼此独立。
-- 省略 `global` 或传入 `null` 仍可按默认上限在第 10 轮成功；显式配置 `maxRounds: null` 在请求前失败。
+- `globalThis.__NLJS_GLOBAL.maxRounds` 覆盖默认值，非法配置不发请求；当前会话使用快照，不同调用彼此独立。
+- 未配置 `maxRounds` 仍可按默认上限在第 10 轮成功；显式配置 `maxRounds: null` 在请求前失败。
 - 生成阶段失败不写缓存；修正成功后缓存仍复用；Jev 与缓存命中不受轮数配置影响。
 - 并发生成的消息历史互不混入。保留 core 与 Babel 现有测试，使用模拟模型响应验证，不用真实模型结果代替控制流断言。
 - 同轮和跨轮重复的工具 ID 立即失败，后续请求不会携带重复调用；独立或并发会话能复用相同 ID。
 
-另以真实 Babel 编译配置示例，使用模拟 HTTP 验证 `__NLJS_GLOBAL.maxRounds` 可传到 core：上限为 1 时终止，上限为 2 时允许修正并 eval 得到结果。使用方法见 [README](../../README.md)。
+另以真实 Babel 编译配置示例，使用模拟 HTTP 验证共享对象的 `maxRounds` 可被 core 读取：上限为 1 时终止，上限为 2 时允许修正并 eval 得到结果。共享配置与独立模块上下文、对象替换、并发会话快照及 SDK 环境回退隔离也由公开入口覆盖。使用方法见 [README](../../README.md)。
