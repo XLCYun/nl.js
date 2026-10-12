@@ -8,7 +8,7 @@ const usage = `Usage: nljs <script> [args...]
 Run JavaScript containing nl\`\` fragments without Babel configuration.
 apiKey, baseURL, and model are required in globalThis.__NLJS_GLOBAL.
 Inherits the script's environment; NL.js does not read it or load .env files.
-Requires Node.js 24 or later. CommonJS fragments belong in async functions.
+Requires Node.js 22.x >=22.18.0 or Node.js 24+. CommonJS fragments belong in async functions.
 
 Options:
   --help, -h     Show this help
@@ -34,8 +34,9 @@ if (!input[0]) {
   console.error(`nljs: A script path is required.\n${usage}`);
   process.exit(1);
 }
-if (Number(process.versions.node.split('.')[0]) < 24) {
-  console.error('nljs: Node.js 24 or later is required.');
+const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+if (!((nodeMajor === 22 && nodeMinor >= 18) || nodeMajor >= 24)) {
+  console.error('nljs: Node.js 22.x >=22.18.0 or Node.js 24+ is required.');
   process.exit(1);
 }
 

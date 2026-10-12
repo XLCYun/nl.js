@@ -172,11 +172,14 @@ test('runs ESM top-level fragments and fragments in imported local modules', asy
     'const result = nl`入口片段`;',
     'console.log(JSON.stringify({ result, main: import.meta.main }));',
   ].join('\n'));
+  await writeFile(path.join(cwd, 'native.mjs'), 'console.log(JSON.stringify({ main: import.meta.main }));');
+  const native = await run(['native.mjs'], { cwd, prefix: [] });
+  assert.equal(native.code, 0, native.stderr);
 
   const result = await run(['script.mjs'], { cwd });
 
   assert.equal(result.code, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), { result: 10, main: true });
+  assert.deepEqual(JSON.parse(result.stdout), { result: 10, ...JSON.parse(native.stdout) });
 });
 
 test('preserves the caller environment and leaves .env files unloaded while using object configuration', async (t) => {
@@ -286,13 +289,16 @@ test('uses package type to run .js as ESM, including dynamic local imports', asy
   ].join('\n'));
   const service = await model(t, 'return value * 3;');
   await writeConfig(cwd, service.config);
+  await writeFile(path.join(cwd, 'native.js'), 'console.log(JSON.stringify({ main: import.meta.main }));');
+  const native = await run(['native.js'], { cwd, prefix: [] });
+  assert.equal(native.code, 0, native.stderr);
 
   const result = await run(['script.js'], { cwd });
 
   assert.equal(result.code, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), {
     result: 18,
-    main: true,
+    ...JSON.parse(native.stdout),
     url: require('node:url').pathToFileURL(path.join(cwd, 'script.js')).href,
   });
 });

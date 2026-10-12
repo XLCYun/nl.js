@@ -16,7 +16,7 @@ main();
 
 ## 快速开始
 
-`nljs` 需要 **Node.js 24 或更新版本**。下面的命令使用 macOS / Linux 的 Bash 或 Zsh，在 Node.js 24、npm 11 环境验证。运行自然语言片段还需要模型服务的 API Key、接口地址和可用模型名称。
+`nljs` 最低支持 **Node.js 22.18.0**：可使用 22.x 的 22.18.0 及更新版本，或 Node.js 24 及更新主版本；不支持 Node.js 23.x。下面的命令使用 macOS / Linux 的 Bash 或 Zsh，已在 Node.js 22.18.0、24.18.0 环境验证。运行自然语言片段还需要模型服务的 API Key、接口地址和可用模型名称。
 
 ### 1. 从源码打包并安装 CLI
 
@@ -248,7 +248,7 @@ sum(1, 2).then(console.log);
 
 ### 启用 Jev 布尔判断
 
-Jev 运行时需要 Node.js 20 或更新版本（使用 `nljs` 命令仍需 Node.js 24+），以及已获得访问资格的 TypeSafe 账户。先到 [TypeSafe Console](https://console.typesafe.ai/) 确认访问状态，再从 [API Keys](https://console.typesafe.ai/keys) 创建 key。官方 2026-09-15 公告仍将 Jev 描述为 early access，可能需要等待候补名单放行。[官方开通说明](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
+Jev 运行时需要 Node.js 20 或更新版本（`nljs` 命令需 Node.js 22.x ≥22.18.0 或 24+），以及已获得访问资格的 TypeSafe 账户。先到 [TypeSafe Console](https://console.typesafe.ai/) 确认访问状态，再从 [API Keys](https://console.typesafe.ai/keys) 创建 key。官方 2026-09-15 公告仍将 Jev 描述为 early access，可能需要等待候补名单放行。[官方开通说明](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
 
 使用 Jev 时，配置对象中的 key、地址和模型都属于 TypeSafe，例如在独立配置文件中设置：
 
