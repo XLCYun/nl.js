@@ -1,5 +1,3 @@
-const { debugJson } = require('./log');
-
 class SubmissionError extends Error {}
 
 const finalOutputTool = {
@@ -97,7 +95,7 @@ function parseFinalOutput(completion, callIds) {
   return output.asyncFuncBody;
 }
 
-async function runCodeGeneration({ openai, model, prompt, maxRounds }) {
+async function runCodeGeneration({ openai, model, prompt, maxRounds, logger }) {
   const callIds = new Set();
   const messages = [
     {
@@ -116,7 +114,7 @@ async function runCodeGeneration({ openai, model, prompt, maxRounds }) {
       tool_choice: { type: 'function', function: { name: 'final_output' } },
       parallel_tool_calls: false,
     });
-    debugJson('response from LLM', completion);
+    logger.debugJson('response from LLM', completion);
 
     const choice = completion?.choices?.[0];
     try {

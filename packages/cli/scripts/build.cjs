@@ -8,7 +8,7 @@ mkdirSync(destination, { recursive: true });
 // Ship the repository's runtime and plugin sources with this package. Consumers
 // install the CLI's npm dependencies, never unpublished sibling packages.
 const sources = {
-  core: ['index.js', 'cache.js', 'context.js', 'harness.js', 'jev.js', 'log.js'],
+  core: ['index.js', 'cache.js', 'config.js', 'context.js', 'harness.js', 'jev.js', 'log.js'],
   babel: ['index.js', 'helpers/checkProgramVar.js', 'helpers/gatherScopeVars.js'],
 };
 const cliDependencies = require('../package.json').dependencies;

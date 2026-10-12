@@ -1,6 +1,6 @@
 const { TypeSafeClient, noul } = require('@typesafe-ai/sdk');
 const { Context } = require('./context');
-const { debug, debugJson } = require('./log');
+const { validateRequestConfig } = require('./config');
 
 function extractQuestion(nlBlock) {
   // Locate the opening template delimiter, skipping comments between nl and the template.
@@ -14,20 +14,26 @@ function extractQuestion(nlBlock) {
   throw new Error('无法提取 nl 模板中的判断条件');
 }
 
-async function judgeWithJev({ global, scope, source }) {
+async function judgeWithJev({ module, scope, source, config, logger }) {
   try {
-    const configuredThreshold = process.env.NLJS_JEV_THRESHOLD;
+    const configuredThreshold = config.jevThreshold;
     const inclusive = configuredThreshold !== undefined;
-    const threshold = inclusive ? Number(configuredThreshold) : 0.5;
-    if (configuredThreshold?.trim() === '' || !Number.isFinite(threshold) ||
+    const threshold = inclusive ? configuredThreshold : 0.5;
+    if (!Number.isFinite(threshold) ||
         threshold < 0 || threshold > 1) {
-      throw new Error('NLJS_JEV_THRESHOLD 必须是 0 到 1 之间的数值（含端点）');
+      throw new Error('__NLJS_GLOBAL.jevThreshold 必须是 0 到 1 之间的数值（含端点）');
     }
+    validateRequestConfig(config);
 
-    const context = new Context({ global, scope, source });
+    const context = new Context({ module, scope, source });
     const { nlBlock, before, after } = context.extractContext();
     const question = extractQuestion(nlBlock);
-    const client = new TypeSafeClient();
+    const client = new TypeSafeClient({
+      apiKey: config.apiKey,
+      baseURL: config.baseURL,
+      defaultModel: config.model,
+      logLevel: config.logLevel,
+    });
     const request = {
       model: client.defaultModel,
       state: {
@@ -44,7 +50,7 @@ async function judgeWithJev({ global, scope, source }) {
         ),
       },
     };
-    debugJson('jev request:', request);
+    logger.debugJson('jev request:', request);
     const response = await client.systemOne(request);
 
     const answer = response?.answers?.result;
@@ -56,7 +62,7 @@ async function judgeWithJev({ global, scope, source }) {
 
     // Preserve the original strict cutoff when no threshold is configured.
     const value = inclusive ? probability >= threshold : probability > threshold;
-    debug('jev judgment:', {
+    logger.debug('jev judgment:', {
       model: response.model,
       probability,
       threshold,

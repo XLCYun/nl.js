@@ -5,6 +5,8 @@ const { transformSync } = require('@babel/core');
 const plugin = require('./dist/vendor/babel');
 
 const runtimeModule = require.resolve('./dist/vendor/core');
+// Establish the shared configuration even when the entry/setup has no nl tag.
+require(runtimeModule);
 
 registerHooks({
   load(url, context, nextLoad) {

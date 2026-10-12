@@ -1,8 +1,8 @@
 
 
 class Context {
-    constructor({ global, scope, source }){
-        this.global = global;
+    constructor({ module, scope, source }){
+        this.module = module;
         this.scope = scope;
         this.source = source;
         this.code = source.code;

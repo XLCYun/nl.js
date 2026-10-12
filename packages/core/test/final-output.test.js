@@ -2,8 +2,7 @@ const assert = require('node:assert/strict');
 const { test, beforeEach, afterEach } = require('node:test');
 const { generate } = require('../index');
 
-const envNames = ['NLJS_PROVIDER', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL'];
-let savedEnv;
+let savedConfig;
 let savedFetch;
 let savedConsoleError;
 let requests;
@@ -16,7 +15,7 @@ function input(question = '返回 a + b', scope = {}) {
   // Each case has its own source location; repeated calls within a case share it.
   const code = prefix + block + '; }\n// test input ' + ++inputId;
   return {
-    global: { sourceCode: code },
+    module: { sourceCode: code },
     scope,
     source: { code, start: prefix.length, end: prefix.length + block.length },
   };
@@ -61,20 +60,19 @@ function jsonResponse(body, status = 200) {
 
 function respondWith(responder) {
   globalThis.fetch = async (url, init) => {
-    const request = { url: String(url), body: JSON.parse(init.body) };
+    const request = { url: String(url), headers: new Headers(init.headers), body: JSON.parse(init.body) };
     requests.push(request);
     return responder(request);
   };
 }
 
 beforeEach(() => {
-  savedEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
+  savedConfig = globalThis.__NLJS_GLOBAL;
   savedFetch = globalThis.fetch;
   savedConsoleError = console.error;
-  process.env.NLJS_PROVIDER = 'openai';
-  process.env.OPENAI_API_KEY = 'test-openai-key';
-  process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
-  process.env.OPENAI_MODEL = 'test-code-model';
+  globalThis.__NLJS_GLOBAL = {
+    apiKey: 'test-openai-key', baseURL: 'https://openai.example/v1', model: 'test-code-model',
+  };
   requests = [];
   globalThis.fetch = async () => { throw new Error('Unexpected network request'); };
   console.error = () => {};
@@ -83,10 +81,7 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = savedFetch;
   console.error = savedConsoleError;
-  for (const name of envNames) {
-    if (savedEnv[name] === undefined) delete process.env[name];
-    else process.env[name] = savedEnv[name];
-  }
+  globalThis.__NLJS_GLOBAL = savedConfig;
 });
 
 test('requests one final_output tool with flat arguments and consumes the first response', async () => {
@@ -311,7 +306,7 @@ test('a configured round limit includes the first request and stops an unfinishe
   respondWith(() => jsonResponse(completion(undefined, 'stop', { content: 'Still preparing.' })));
   for (const maxRounds of [1, 3]) {
     const params = input();
-    params.global.maxRounds = maxRounds;
+    globalThis.__NLJS_GLOBAL.maxRounds = maxRounds;
     const previousRequests = requests.length;
 
     await assert.rejects(generate(params), new RegExp(`代码生成失败:.*轮数上限 ${maxRounds}：.*final_output`));
@@ -326,17 +321,17 @@ test('invalid round limits fail before a model request without converting their 
     '2', '', true, false, 2n, {}, [], new Number(2),
   ]) {
     const params = input();
-    params.global.maxRounds = maxRounds;
+    globalThis.__NLJS_GLOBAL.maxRounds = maxRounds;
     await assert.rejects(generate(params), /__NLJS_GLOBAL\.maxRounds.*正.*安全整数/);
   }
   assert.equal(requests.length, 0);
 });
 
-test('omitted or null global preserves the default ten-round generation limit', async () => {
-  for (const global of [undefined, null]) {
+test('omitted or undefined maxRounds preserves the default ten-round generation limit', async () => {
+  for (const explicitUndefined of [false, true]) {
     const params = input();
-    if (global === undefined) delete params.global;
-    else params.global = global;
+    if (explicitUndefined) globalThis.__NLJS_GLOBAL.maxRounds = undefined;
+    else delete globalThis.__NLJS_GLOBAL.maxRounds;
     const previousRequests = requests.length;
     respondWith(() => jsonResponse(requests.length - previousRequests < 10
       ? completion(undefined, 'stop', { content: 'Still preparing.' })
@@ -351,7 +346,7 @@ test('positive safe integer limits accept a valid submission in their first roun
   respondWith(() => jsonResponse(completion([finalOutputCall('return 14;')])));
   for (const maxRounds of [1, Number.MAX_SAFE_INTEGER]) {
     const params = input();
-    params.global.maxRounds = maxRounds;
+    globalThis.__NLJS_GLOBAL.maxRounds = maxRounds;
     assert.equal(await eval(await generate(params)), 14);
   }
   assert.equal(requests.length, 2);
@@ -359,13 +354,14 @@ test('positive safe integer limits accept a valid submission in their first roun
 
 test('a running generation keeps its configuration and context while the next generation sees changes', async () => {
   const params = input('返回 state.value', { state: { value: 'original' } });
-  params.global.maxRounds = 2;
+  globalThis.__NLJS_GLOBAL.maxRounds = 2;
   respondWith(() => {
     if (requests.length === 1) {
-      params.global.maxRounds = 1;
+      globalThis.__NLJS_GLOBAL.maxRounds = 1;
       params.scope.state.value = 'changed';
-      process.env.OPENAI_MODEL = 'next-code-model';
-      process.env.OPENAI_BASE_URL = 'https://next-openai.example/v1';
+      globalThis.__NLJS_GLOBAL.model = 'next-code-model';
+      globalThis.__NLJS_GLOBAL.baseURL = 'https://next-openai.example/v1';
+      globalThis.__NLJS_GLOBAL.apiKey = 'next-key';
       return jsonResponse(completion(undefined, 'stop', { content: 'Preparing the body.' }));
     }
     return jsonResponse(completion([finalOutputCall('return "original";')]));
@@ -375,28 +371,29 @@ test('a running generation keeps its configuration and context while the next ge
   assert.equal(requests.length, 2);
   assert.equal(requests[1].url, 'https://openai.example/v1/chat/completions');
   assert.equal(requests[1].body.model, 'test-code-model');
+  assert.equal(requests[1].headers.get('authorization'), 'Bearer test-openai-key');
   assert.deepEqual(requests[1].body.messages.slice(0, 2), requests[0].body.messages);
   assert.ok(requests[1].body.messages[1].content.includes('"value":"original"'));
 
   const next = input('再次返回 state.value', params.scope);
-  next.global = params.global;
   respondWith(() => jsonResponse(completion(undefined, 'stop', { content: 'Not submitted.' })));
   await assert.rejects(generate(next), /轮数上限 1：.*final_output/);
   assert.equal(requests.length, 3);
   assert.equal(requests[2].url, 'https://next-openai.example/v1/chat/completions');
   assert.equal(requests[2].body.model, 'next-code-model');
+  assert.equal(requests[2].headers.get('authorization'), 'Bearer next-key');
   assert.equal(requests[2].body.messages.length, 2);
   assert.ok(requests[2].body.messages[1].content.includes('"value":"changed"'));
 });
 
 test('a failed generation can be retried with a new limit and its repaired code bypasses invalid configuration when cached', async () => {
   const params = input();
-  params.global.maxRounds = 1;
+  globalThis.__NLJS_GLOBAL.maxRounds = 1;
   respondWith(() => jsonResponse(completion(undefined, 'stop', { content: 'Not submitted.' })));
   await assert.rejects(generate(params), /轮数上限 1：/);
   assert.equal(requests.length, 1);
 
-  params.global.maxRounds = 2;
+  globalThis.__NLJS_GLOBAL.maxRounds = 2;
   respondWith(() => jsonResponse(requests.length === 2
     ? withArguments('{')
     : completion([finalOutputCall('return 15;')])));
@@ -405,16 +402,14 @@ test('a failed generation can be retried with a new limit and its repaired code 
   assert.equal(requests.length, 3);
   assert.equal(requests[1].body.messages.length, 2);
 
-  params.global.maxRounds = null;
+  globalThis.__NLJS_GLOBAL.maxRounds = null;
   assert.equal(await generate(params), code);
   assert.equal(requests.length, 3);
 });
 
 test('concurrent generations keep separate round limits, models and conversation histories', { timeout: 2000 }, async () => {
   const first = input('返回 session-A 的结果', { session: 'session-A' });
-  first.global.maxRounds = 2;
   const second = input('返回 session-B 的结果', { session: 'session-B' });
-  second.global.maxRounds = 3;
   const sessions = { 'session-A': [], 'session-B': [] };
   let releaseFirstReplies;
   const bothStarted = new Promise((resolve) => { releaseFirstReplies = resolve; });
@@ -432,11 +427,13 @@ test('concurrent generations keep separate round limits, models and conversation
       : completion(undefined, 'stop', { content: `${session} reply ${round}` }));
   });
 
-  process.env.OPENAI_MODEL = 'first-model';
+  globalThis.__NLJS_GLOBAL.maxRounds = 2;
+  globalThis.__NLJS_GLOBAL.model = 'first-model';
   const firstGeneration = generate(first);
-  process.env.OPENAI_MODEL = 'second-model';
+  globalThis.__NLJS_GLOBAL.maxRounds = 3;
+  globalThis.__NLJS_GLOBAL.model = 'second-model';
   const secondGeneration = generate(second);
-  process.env.OPENAI_MODEL = 'later-model';
+  globalThis.__NLJS_GLOBAL = { provider: 'jev', maxRounds: 1, model: 'later-model' };
   const [firstResult, secondResult] = await Promise.allSettled([firstGeneration, secondGeneration]);
 
   assert.equal(firstResult.status, 'rejected');

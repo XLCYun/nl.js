@@ -6,11 +6,11 @@ module.exports = function ({ types: t }, options = {}) {
   const buildRequireCore = template('var __NLJS_CORE = require(%%runtimeModule%%)', {
     syntacticPlaceholders: true
   })
-  const buildGlobalVar = template(`var __NLJS_GLOBAL = { sourceCode: %%sourceCode%%, vars: {} }`, {
+  const buildModuleVar = template(`var __NLJS_MODULE = { sourceCode: %%sourceCode%%, vars: {} }`, {
     syntacticPlaceholders: true
   })
   const buildEval = template(
-    `await eval(await __NLJS_CORE.generate({ global: __NLJS_GLOBAL, scope: %%scope%%, source: { code: __NLJS_GLOBAL.sourceCode, start: %%start%%, end: %%end%% } }))`,
+    `await eval(await __NLJS_CORE.generate({ module: __NLJS_MODULE, scope: %%scope%%, source: { code: __NLJS_MODULE.sourceCode, start: %%start%%, end: %%end%% } }))`,
     { syntacticPlaceholders: true }
   )
 
@@ -48,14 +48,14 @@ module.exports = function ({ types: t }, options = {}) {
           path.node.body.unshift(requireStatement)
         }
 
-        // Check if __NLJS_GLOBAL variable declaration exists in the current source file
-        const hasGlobal = checkProgramVar(t, path, "__NLJS_GLOBAL")
+        // Check if __NLJS_MODULE variable declaration exists in the current source file
+        const hasModule = checkProgramVar(t, path, "__NLJS_MODULE")
 
-        // If not found, add the global variable declaration
-        if (!hasGlobal) {
-          const globalStatement = buildGlobalVar({ sourceCode: t.stringLiteral(sourceCode) })
-          // Add the global variable declaration to the beginning of the file
-          path.node.body.unshift(globalStatement)
+        // If not found, add the per-module context declaration
+        if (!hasModule) {
+          const moduleStatement = buildModuleVar({ sourceCode: t.stringLiteral(sourceCode) })
+          // Add the per-module context declaration to the beginning of the file
+          path.node.body.unshift(moduleStatement)
         }
       },
       TaggedTemplateExpression(path) {
