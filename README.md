@@ -185,14 +185,14 @@ Hello, World!
 | --- | --- | --- |
 | `provider` | `openai` 生成代码，`jev` 判断条件 | `openai` |
 | `apiKey` | 当前 provider 的 API Key，必须为非空字符串 | 发起模型请求前报错 |
-| `baseURL` | 当前 provider 的接口基础地址 | OpenAI：`https://api.openai.com/v1`；Jev：`https://api.typesafe.ai` |
-| `model` | 当前 provider 的模型名称 | OpenAI：`deepseek-v4-pro-0813`；Jev：`jev-latest` |
+| `baseURL` | 当前 provider 的接口基础地址，必须为非空字符串 | 发起模型请求前报错 |
+| `model` | 当前 provider 的模型名称，必须为非空字符串 | 发起模型请求前报错 |
 | `maxRounds` | OpenAI 代码生成的最大轮数，正的安全整数 | `10`，包含首轮 |
 | `jevThreshold` | Jev 返回 `true` 的概率下限，数值范围 `[0, 1]`，配置后按 `p >= 阈值` 判断 | 保留 `p > 0.5` |
 | `debug` | NL.js 调试日志开关，布尔值 | `false` |
 | `logLevel` | SDK 日志级别：`off`、`error`、`warn`、`info`、`debug` | `warn` |
 
-这些默认值由运行时明确传给 SDK，不使用 SDK 的环境变量回退。请显式设置 `baseURL`、`model`，确保模型属于所选服务；OpenAI 路径要求支持 Chat Completions 工具调用，包括指定 `tool_choice` 和 `parallel_tool_calls: false`。本项目不要求服务支持 `strict: true`，工具参数由运行时校验；仅支持文本回复的模型无法用于此路径。
+两种 provider 都必须显式设置 `apiKey`、`baseURL`、`model`；遗漏、`undefined`、`null`、空白或非字符串值会在模型请求前报错。运行时不为地址和模型补默认值，也不使用 SDK 的环境变量回退。请确保模型属于所选服务；OpenAI 路径要求支持 Chat Completions 工具调用，包括指定 `tool_choice` 和 `parallel_tool_calls: false`。本项目不要求服务支持 `strict: true`，工具参数由运行时校验；仅支持文本回复的模型无法用于此路径。
 
 从旧版迁移时，原先只设置 `process.env` 的调用方需要显式赋值 `globalThis.__NLJS_GLOBAL`；已有 Babel 编译产物也需要重新编译，以生成 `__NLJS_MODULE` 和新的 `module` 参数。
 
@@ -271,6 +271,7 @@ npm install --prefix packages/babel
 npm install --prefix examples/babel/jevBoolean
 
 export TYPESAFE_API_KEY='your-typesafe-api-key'
+export TYPESAFE_BASE_URL='https://api.typesafe.ai'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
 export NLJS_JEV_THRESHOLD='0.8'
 NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
@@ -455,7 +456,7 @@ npm install --prefix examples/babel/helloWorld
 
 使用 CLI 时，确认脚本先加载了自己的配置文件，并在首次片段执行前设置 `globalThis.__NLJS_GLOBAL`。仅导出环境变量或修改 `.env` 不会配置运行时；使用外部配置系统时，由调用方显式映射。ESM 依赖可能先于入口正文执行，应按快速开始中的初始化顺序加载。
 
-Babel 示例在 `npm start` 中先加载 `.env`，再运行 `../configure.cjs` 映射。终端已导出的同名变量优先于这些示例的 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。`__NLJS_GLOBAL.apiKey 必须是非空字符串` 通常说明配置未加载或 key 未填写。
+Babel 示例在 `npm start` 中先加载 `.env`，再运行 `../configure.cjs` 映射。终端已导出的同名变量优先于这些示例的 `.env`，修改文件后若仍使用旧配置，检查终端变量并按需 `unset`。`__NLJS_GLOBAL.apiKey`、`__NLJS_GLOBAL.baseURL` 或 `__NLJS_GLOBAL.model` 的“必须是非空字符串”错误表示对应配置缺失或无效；请检查配置文件及示例适配器的映射。
 
 ### 输出为空、返回 `undefined` 或生成代码执行失败
 

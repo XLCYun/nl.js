@@ -16,10 +16,7 @@ function snapshotConfig() {
     throw new Error(`不支持的 __NLJS_GLOBAL.provider: ${provider}，可选值为 openai 或 jev`);
   }
   return {
-    provider,
-    apiKey,
-    baseURL: baseURL === undefined ? (provider === 'jev' ? 'https://api.typesafe.ai' : 'https://api.openai.com/v1') : baseURL,
-    model: model === undefined ? (provider === 'jev' ? 'jev-latest' : 'deepseek-v4-pro-0813') : model,
+    provider, apiKey, baseURL, model,
     maxRounds, jevThreshold, debug, logLevel,
   };
 }

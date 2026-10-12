@@ -98,16 +98,18 @@ test('OpenAI reads the shared configuration on each call and ignores business en
   assert.equal(requests[0].headers.get('openai-project'), null);
   assert.doesNotMatch(requests[0].body.messages[1].content, /object-key|__NLJS_GLOBAL/);
 
-  globalThis.__NLJS_GLOBAL = { apiKey: 'replacement-key' };
+  globalThis.__NLJS_GLOBAL = {
+    apiKey: 'replacement-key', baseURL: 'https://replacement.example/v1', model: 'replacement-model',
+  };
   assert.equal(await eval(await generate(input())), 7);
-  assert.equal(requests[1].url, 'https://api.openai.com/v1/chat/completions');
-  assert.equal(requests[1].body.model, 'deepseek-v4-pro-0813');
+  assert.equal(requests[1].url, 'https://replacement.example/v1/chat/completions');
+  assert.equal(requests[1].body.model, 'replacement-model');
   assert.equal(requests[1].headers.get('authorization'), 'Bearer replacement-key');
   assert.deepEqual(logs, []);
   for (const [key, value] of Object.entries(hostileEnv)) assert.equal(process.env[key], value);
 });
 
-test('Jev uses explicit configuration and static defaults without SDK environment fallback', async () => {
+test('Jev uses explicit configuration without SDK environment fallback', async () => {
   globalThis.fetch = async (url, init) => {
     requests.push({ url: String(url), headers: new Headers(init.headers), body: JSON.parse(init.body) });
     return jsonResponse({ model: 'jev-response', answers: { result: { type: 'noul', noul: 0.5 } } });
@@ -123,11 +125,13 @@ test('Jev uses explicit configuration and static defaults without SDK environmen
   assert.deepEqual(requests[0].body.state.scope, { value: 7 });
   assert.doesNotMatch(JSON.stringify(requests[0].body), /object-jev-key|__NLJS_GLOBAL/);
 
-  globalThis.__NLJS_GLOBAL = { provider: 'jev', apiKey: 'default-jev-key' };
+  globalThis.__NLJS_GLOBAL = {
+    provider: 'jev', apiKey: 'replacement-jev-key', baseURL: 'https://replacement-jev.example', model: 'replacement-jev-model',
+  };
   assert.equal(await generate(input()), 'false');
-  assert.equal(requests[1].url, 'https://api.typesafe.ai/v1/systemone');
-  assert.equal(requests[1].body.model, 'jev-latest');
-  assert.equal(requests[1].headers.get('authorization'), 'Bearer default-jev-key');
+  assert.equal(requests[1].url, 'https://replacement-jev.example/v1/systemone');
+  assert.equal(requests[1].body.model, 'replacement-jev-model');
+  assert.equal(requests[1].headers.get('authorization'), 'Bearer replacement-jev-key');
   assert.deepEqual(logs, []);
 });
 
@@ -141,13 +145,37 @@ test('neither provider uses an environment-only API key or accepts values that t
       ['debug', [null, '', 'true', 1]],
     ]) {
       for (const value of values) {
-        globalThis.__NLJS_GLOBAL = { provider, apiKey: 'object-key', [key]: value };
+        globalThis.__NLJS_GLOBAL = {
+          provider, apiKey: 'object-key', baseURL: 'https://object.example', model: 'object-model', [key]: value,
+        };
         await assert.rejects(generate(input()), new RegExp(`__NLJS_GLOBAL\\.${key}`));
       }
     }
   }
   assert.equal(requests.length, 0);
 });
+
+for (const provider of ['openai', 'jev']) {
+  for (const field of ['baseURL', 'model']) {
+    test(`${provider} requires explicit ${field} even when the environment supplies it`, async () => {
+      globalThis.fetch = async (url, init) => {
+        requests.push({ url: String(url), body: JSON.parse(init.body) });
+        return jsonResponse(provider === 'jev'
+          ? { model: 'jev-response', answers: { result: { type: 'noul', noul: 0.5 } } }
+          : finalOutput());
+      };
+      for (const omitted of [true, false]) {
+        globalThis.__NLJS_GLOBAL = {
+          provider, apiKey: 'object-key', baseURL: 'https://object.example', model: 'object-model',
+        };
+        if (omitted) delete globalThis.__NLJS_GLOBAL[field];
+        else globalThis.__NLJS_GLOBAL[field] = undefined;
+        await assert.rejects(generate(input()), new RegExp(`__NLJS_GLOBAL\\.${field} 必须是非空字符串`));
+        assert.equal(requests.length, 0);
+      }
+    });
+  }
+}
 
 test('in-flight calls keep their settings and debugging while later calls observe global changes', async () => {
   for (const provider of ['openai', 'jev']) {
@@ -197,7 +225,9 @@ test('SDK logging is controlled by the object logLevel independently of NL.js de
     globalThis.fetch = async () => jsonResponse(provider === 'jev'
       ? { model: 'jev-response', answers: { result: { type: 'noul', noul: 0.5 } } }
       : finalOutput());
-    globalThis.__NLJS_GLOBAL = { provider, apiKey: 'object-key', logLevel: 'debug', debug: false };
+    globalThis.__NLJS_GLOBAL = {
+      provider, apiKey: 'object-key', baseURL: 'https://object.example', model: 'object-model', logLevel: 'debug', debug: false,
+    };
     logs.length = 0;
     await generate(input());
     assert.ok(logs.length > 0, `${provider} debug logging should be enabled explicitly`);

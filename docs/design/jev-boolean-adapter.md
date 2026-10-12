@@ -22,6 +22,7 @@ globalThis.__NLJS_GLOBAL = {
 
 ```bash
 export TYPESAFE_API_KEY='your-typesafe-api-key'
+export TYPESAFE_BASE_URL='https://api.typesafe.ai'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
 export NLJS_JEV_THRESHOLD='0.8'
 NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
@@ -72,12 +73,12 @@ JavaScript 的 `eval` 会原样返回非字符串参数，所以让 `generate` �
 
 以下描述当前运行时约定；配置来源已从第一版的环境变量迁到共享对象。
 
-1. **通过运行时配置选择能力。** `globalThis.__NLJS_GLOBAL.provider` 接受 `openai`、`jev`，默认 `openai`；非法值明确报错。选择 Jev 时才创建 TypeSafe 客户端，`apiKey` 必须为非空 TypeSafe key，不要求 OpenAI key。每次调用固定当前对象的 key、地址、模型、阈值和日志配置，切换 provider 不需要重新编译。
+1. **通过运行时配置选择能力。** `globalThis.__NLJS_GLOBAL.provider` 接受 `openai`、`jev`，默认 `openai`；非法值明确报错。选择 Jev 时才创建 TypeSafe 客户端，`apiKey` 必须为非空 TypeSafe key，不要求 OpenAI key；`baseURL` 和 `model` 也必须显式配置为非空字符串。每次调用固定当前对象的 key、地址、模型、阈值和日志配置，切换 provider 不需要重新编译。
 2. **保留连贯源码并直接提问。** 从原始 `nl` 片段中去掉外层标签和模板反引号，将问题或条件原文保存在 `state.question` 中。`state.scope` 包含变量当前值，`state.context` 是 `before + '<nl-judge>' + question + '</nl-judge>' + after` 拼接成的完整源码字符串。`<nl-judge>...</nl-judge>` 是项目自定义的定位标记，标签内的文本与 `question` 有意重复。Noul 的 `instructions` 直接以问题原文开头，再说明源码标记的位置，并以 scope 为当前变量值。`question` 是自定义的 state 字段名，实际提问的 API 字段是 `questions.result.instructions`；Noul 支持问句和陈述式条件。不会将 before、after 拆成两个字段交给 Jev。[State](https://docs.typesafe.ai/concepts/state)、[Noul](https://docs.typesafe.ai/primitives/noul)
 3. **保留已有上下文语义。** Babel 用 `__NLJS_MODULE` 保存每个文件自己的源码和变量元数据，配置对象不会被自动加入 scope。提取条件文本时保留内部换行、转义字符和插值源码；只移除外层模板语法，不解码转义，也不新增 JavaScript 插值求值行为。模板插值仍与 scope 一起交给模型。示例使用直接的 `1 > 0` 文本，不先在本地计算答案。
 4. **概率由代码转成布尔值。** Noul 返回 `P(yes)`，不存在独立的 confidence。配置数值字段 `jevThreshold` 后采用 `p >= 阈值`，例如 `0.8` 时恰好 0.8 返回 true。阈值在每次判断开始时固定，只接受 `[0, 1]` 内的有限数值；字符串、`null`、非数值或越界值在发请求前报错。未配置时保留 `p > 0.5`，恰好 0.5 为 false；显式配置为 `0.5` 时采用 `p >= 0.5`。该配置只影响 Jev，不改变发送给模型的问题或状态。布尔字段 `debug: true` 在请求前以完整 JSON 打印模型名、state 和 questions，返回后显示原始概率、阈值、比较方式及布尔结果。阈值只决定代码如何使用概率，不代表质量保证。[Noul](https://docs.typesafe.ai/primitives/noul)
 5. **每次重新判断。** Jev 分支在代码缓存检查之前执行，既不读也不写代码缓存，避免冻结首次结果；也不会命中此前 OpenAI 保存的代码。OpenAI 仍使用原有代码缓存，命中时不重新请求或校验请求配置，修改模型不会强制重新生成。
-6. **错误与否定分开。** 缺少 key、请求失败或非法概率抛出 `Jev 判断失败`，保留原始错误为 cause。使用 SDK 默认重试策略，没有回退到 OpenAI，也不吞错返回 false。
+6. **错误与否定分开。** 缺少 key、地址或模型、请求失败或非法概率抛出 `Jev 判断失败`，保留原始错误为 cause。使用 SDK 默认重试策略，没有回退到 OpenAI，也不吞错返回 false。
 7. **独立问题才可批量。** 同一状态上的多个独立问题可以合并请求；后一个判断依赖前一个结果或中间动作时仍需顺序执行。[State](https://docs.typesafe.ai/concepts/state)
 
 最初接入范围：core 新增 Jev 适配器与 provider 分支，添加 SDK 依赖、运行时测试和 `jevBoolean` 示例。后续共享配置迁移保留片段转换和判断协议，只将文件上下文更名为 `__NLJS_MODULE`，配置改由全局对象提供。
@@ -109,12 +110,12 @@ export NLJS_PROVIDER='jev'
 export NLJS_JEV_THRESHOLD='0.8'
 export TYPESAFE_API_KEY='your-typesafe-api-key'
 export TYPESAFE_DEFAULT_MODEL='jev-1.13.0'
-# 可省略；NL.js 的静态默认地址就是此地址，末尾不加 /v1
+# 必须显式配置，末尾不加 /v1
 export TYPESAFE_BASE_URL='https://api.typesafe.ai'
 NLJS_PROVIDER=jev npm start --prefix examples/babel/jevBoolean
 ```
 
-运行时向 SDK 显式提供 `apiKey`、`baseURL`、`model` 和 `logLevel`；省略模型时使用静态默认值 `jev-latest`，日志级别默认为 `warn`，不读取 SDK 环境变量。上面环境变量的映射由示例 `configure.cjs` 完成。研究核对时 `jev-latest` 指向 `jev-1.13.0`；这里保留该固定版本作为示例，实际可用版本以服务为准。[客户端配置](https://docs.typesafe.ai/sdk/javascript/api/interfaces/TypeSafeClientConfig)、[模型列表](https://docs.typesafe.ai/models)
+运行时向 SDK 显式提供 `apiKey`、`baseURL`、`model` 和 `logLevel`；前三项缺失或不是非空字符串时直接报错，地址和模型没有默认值。日志级别仍默认为 `warn`，不读取 SDK 环境变量。上面环境变量的映射由示例 `configure.cjs` 完成，适配器也不补地址或模型。研究核对时 `jev-latest` 指向 `jev-1.13.0`；这里保留该固定版本作为示例，实际可用版本以服务为准。[客户端配置](https://docs.typesafe.ai/sdk/javascript/api/interfaces/TypeSafeClientConfig)、[模型列表](https://docs.typesafe.ai/models)
 
 可以先验证认证与模型列表：
 

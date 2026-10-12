@@ -490,12 +490,16 @@ test('installs an independent tarball and configures both providers without envi
   assert.equal(jevService.requests[0].headers.authorization, 'Bearer test-key');
   assert.equal(jevService.requests[0].body.model, 'test-model');
 
-  for (const provider of ['openai', 'jev']) {
-    await writeConfig(cwd, { provider });
-    const missingKey = await run(['script.js'], options);
-    assert.notEqual(missingKey.code, 0);
-    assert.match(missingKey.stderr, /__NLJS_GLOBAL\.apiKey/);
+  for (const configuration of [service.config, jevService.config]) {
+    for (const field of ['apiKey', 'baseURL', 'model']) {
+      const incomplete = { ...configuration };
+      delete incomplete[field];
+      await writeConfig(cwd, incomplete);
+      const missingField = await run(['script.js'], options);
+      assert.notEqual(missingField.code, 0);
+      assert.match(missingField.stderr, new RegExp(`__NLJS_GLOBAL\\.${field} 必须是非空字符串`));
+    }
   }
-  assert.equal(service.requests.length, 2, 'environment-only keys must not send requests');
-  assert.equal(jevService.requests.length, 1, 'environment-only keys must not send requests');
+  assert.equal(service.requests.length, 2, 'environment-only configuration must not send requests');
+  assert.equal(jevService.requests.length, 1, 'environment-only configuration must not send requests');
 });

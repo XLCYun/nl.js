@@ -6,7 +6,7 @@ const { pathToFileURL } = require('node:url');
 const usage = `Usage: nljs <script> [args...]
 
 Run JavaScript containing nl\`\` fragments without Babel configuration.
-Configure NL.js with globalThis.__NLJS_GLOBAL (apiKey, baseURL, model, etc.).
+apiKey, baseURL, and model are required in globalThis.__NLJS_GLOBAL.
 Inherits the script's environment; NL.js does not read it or load .env files.
 Requires Node.js 24 or later. CommonJS fragments belong in async functions.
 

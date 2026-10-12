@@ -43,7 +43,9 @@ function respondWith(responder) {
 beforeEach(() => {
   savedConfig = globalThis.__NLJS_GLOBAL;
   savedFetch = globalThis.fetch;
-  globalThis.__NLJS_GLOBAL = { provider: 'jev', apiKey: 'test-typesafe-key', logLevel: 'off' };
+  globalThis.__NLJS_GLOBAL = {
+    provider: 'jev', apiKey: 'test-typesafe-key', baseURL: 'https://typesafe.example', model: 'test-jev-model', logLevel: 'off',
+  };
   requests = [];
   globalThis.fetch = async () => { throw new Error('Unexpected network request'); };
 });
@@ -166,7 +168,7 @@ test('Jev returns the model judgment and applies the threshold, including false 
     assert.equal(await eval(code), value);
   }
   assert.equal(requests.length, probabilities.length);
-  assert.equal(requests[0].body.model, 'jev-latest');
+  assert.equal(requests[0].body.model, 'test-jev-model');
 });
 
 test('a configured Jev threshold rejects 0.51 and includes exactly 0.8', async () => {
