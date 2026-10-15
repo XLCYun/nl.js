@@ -4,7 +4,7 @@
   "scripts": {
     "build": "babel index.js --out-dir lib",
     "prestart": "npm run build",
-    "start": "node -r dotenv/config lib/index.js"
+    "start": "node -r dotenv/config -r ../configure.cjs lib/index.js"
   },
   "dependencies": {
     "@nljs/core": "file:../../../packages/core",

@@ -17,8 +17,8 @@ async function solve(chessboard, row) {
 }
 
 async function main() {
-  if (process.env.NLJS_PROVIDER !== 'jev') {
-    throw new Error('请设置 NLJS_PROVIDER=jev 后运行此示例');
+  if (globalThis.__NLJS_GLOBAL.provider !== 'jev') {
+    throw new Error("请配置 globalThis.__NLJS_GLOBAL.provider = 'jev' 后运行此示例");
   }
 
   const chessboard = Array.from({ length: 8 }, () => Array(8).fill(0));

@@ -1,0 +1,27 @@
+{
+  "name": "@nljs/cli",
+  "version": "0.0.1",
+  "description": "Run JavaScript with nl fragments without configuring Babel",
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XLCYun/nl.js.git",
+    "directory": "packages/cli"
+  },
+  "bin": { "nljs": "bin/nljs.cjs" },
+  "exports": {},
+  "engines": { "node": "^22.18.0 || >=24.0.0" },
+  "files": ["bin/", "register.cjs", "dist/"],
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "prepack": "npm run build",
+    "pretest": "npm run build",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/template": "^7.23.0",
+    "@typesafe-ai/sdk": "^0.6.0",
+    "openai": "6.15.0"
+  }
+}

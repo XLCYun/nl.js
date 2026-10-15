@@ -11,6 +11,15 @@ function countEvalCalls(code) {
 }
 
 describe('@nljs/babel plugin tests', () => {
+  test('Keeps source metadata in a module object without declaring a local global configuration', () => {
+    const result = babel.transformSync('async function main() { nl`return 7`; }', { plugins: [plugin] });
+
+    expect(result.code).toContain('var __NLJS_MODULE = {');
+    expect(result.code).toContain('module: __NLJS_MODULE');
+    expect(result.code).toContain('code: __NLJS_MODULE.sourceCode');
+    expect(result.code).not.toMatch(/(?:var|let|const) __NLJS_GLOBAL/);
+  });
+
   test('Should not introduce __NLJS_CORE when nl`` does not exist in code', () => {
     const code = `
       function test() {
@@ -73,7 +82,7 @@ describe('@nljs/babel plugin tests', () => {
     expect(countEvalCalls(result.code)).toBe(2);
   });
 
-  test('Should not inject __NLJS_GLOBAL when nl`` does not exist in code', () => {
+  test('Should not inject __NLJS_MODULE when nl`` does not exist in code', () => {
     const code = `
       function test() {
         console.log("normal log");
@@ -85,11 +94,11 @@ describe('@nljs/babel plugin tests', () => {
       plugins: [plugin]
     });
 
-    // Check that the transformed code does not contain __NLJS_GLOBAL
-    expect(result.code).not.toContain('__NLJS_GLOBAL');
+    // Check that the transformed code does not contain __NLJS_MODULE
+    expect(result.code).not.toContain('__NLJS_MODULE');
   });
 
-  test('Should inject __NLJS_GLOBAL when nl`` exists in code', () => {
+  test('Should inject __NLJS_MODULE when nl`` exists in code', () => {
     const code = `
       function test() {
         nl\`some template\`;
@@ -101,13 +110,13 @@ describe('@nljs/babel plugin tests', () => {
       plugins: [plugin]
     });
 
-    // Check that the transformed code contains __NLJS_GLOBAL
-    expect(result.code).toContain('__NLJS_GLOBAL');
-    // Check the declaration format of __NLJS_GLOBAL
-    expect(result.code).toContain('var __NLJS_GLOBAL = {');
+    // Check that the transformed code contains __NLJS_MODULE
+    expect(result.code).toContain('__NLJS_MODULE');
+    // Check the declaration format of __NLJS_MODULE
+    expect(result.code).toContain('var __NLJS_MODULE = {');
     // Check that it is only injected once
-    const globalCount = (result.code.match(/var __NLJS_GLOBAL = \{/g) || []).length;
-    expect(globalCount).toBe(1);
+    const moduleCount = (result.code.match(/var __NLJS_MODULE = \{/g) || []).length;
+    expect(moduleCount).toBe(1);
   });
 
   test('Should not insert eval when nl`` does not exist in code', () => {
@@ -209,6 +218,7 @@ describe('@nljs/babel plugin tests', () => {
       expect(hasVariable(scope, 'globalVar3')).toBe(true);
       // Check that internal variables are excluded
       expect(hasVariable(scope, '__NLJS_CORE')).toBe(false);
+      expect(hasVariable(scope, '__NLJS_MODULE')).toBe(false);
       expect(hasVariable(scope, '__NLJS_GLOBAL')).toBe(false);
     });
 
@@ -236,6 +246,7 @@ describe('@nljs/babel plugin tests', () => {
       expect(hasVariable(scope, 'globalVar')).toBe(true);
       // Check that internal variables are excluded
       expect(hasVariable(scope, '__NLJS_CORE')).toBe(false);
+      expect(hasVariable(scope, '__NLJS_MODULE')).toBe(false);
       expect(hasVariable(scope, '__NLJS_GLOBAL')).toBe(false);
     });
 
@@ -265,6 +276,7 @@ describe('@nljs/babel plugin tests', () => {
       expect(hasVariable(scope, 'globalVar')).toBe(true);
       // Check that internal variables are excluded
       expect(hasVariable(scope, '__NLJS_CORE')).toBe(false);
+      expect(hasVariable(scope, '__NLJS_MODULE')).toBe(false);
       expect(hasVariable(scope, '__NLJS_GLOBAL')).toBe(false);
     });
 
@@ -297,6 +309,7 @@ describe('@nljs/babel plugin tests', () => {
       expect(hasVariable(scope, 'globalVar')).toBe(true);
       // Check that internal variables are excluded
       expect(hasVariable(scope, '__NLJS_CORE')).toBe(false);
+      expect(hasVariable(scope, '__NLJS_MODULE')).toBe(false);
       expect(hasVariable(scope, '__NLJS_GLOBAL')).toBe(false);
     });
 

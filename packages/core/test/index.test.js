@@ -2,11 +2,7 @@ const assert = require('node:assert/strict');
 const { test, beforeEach, afterEach } = require('node:test');
 const { generate } = require('../index');
 
-const envNames = [
-  'NLJS_PROVIDER', 'NLJS_JEV_THRESHOLD', 'TYPESAFE_API_KEY', 'TYPESAFE_BASE_URL', 'TYPESAFE_DEFAULT_MODEL',
-  'TYPESAFE_LOG_LEVEL', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
-];
-let savedEnv;
+let savedConfig;
 let savedFetch;
 let requests;
 
@@ -15,7 +11,7 @@ function input(question = '1 > 0', scope = {}) {
   const prefix = 'async function main() { const result = ';
   const code = prefix + block + '; }';
   return {
-    global: { sourceCode: code },
+    module: { sourceCode: code },
     scope,
     source: { code, start: prefix.length, end: prefix.length + block.length },
   };
@@ -45,27 +41,23 @@ function respondWith(responder) {
 }
 
 beforeEach(() => {
-  savedEnv = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
+  savedConfig = globalThis.__NLJS_GLOBAL;
   savedFetch = globalThis.fetch;
-  for (const name of envNames) delete process.env[name];
-  process.env.NLJS_PROVIDER = 'jev';
-  process.env.TYPESAFE_API_KEY = 'test-typesafe-key';
-  process.env.TYPESAFE_LOG_LEVEL = 'off';
+  globalThis.__NLJS_GLOBAL = {
+    provider: 'jev', apiKey: 'test-typesafe-key', baseURL: 'https://typesafe.example', model: 'test-jev-model', logLevel: 'off',
+  };
   requests = [];
   globalThis.fetch = async () => { throw new Error('Unexpected network request'); };
 });
 
 afterEach(() => {
   globalThis.fetch = savedFetch;
-  for (const name of envNames) {
-    if (savedEnv[name] === undefined) delete process.env[name];
-    else process.env[name] = savedEnv[name];
-  }
+  globalThis.__NLJS_GLOBAL = savedConfig;
 });
 
 test('Jev uses its own API, model configuration and current source context without an OpenAI key', async () => {
-  process.env.TYPESAFE_BASE_URL = 'https://typesafe.example';
-  process.env.TYPESAFE_DEFAULT_MODEL = 'jev-1.13.0';
+  globalThis.__NLJS_GLOBAL.baseURL = 'https://typesafe.example';
+  globalThis.__NLJS_GLOBAL.model = 'jev-1.13.0';
   respondWith(() => jsonResponse(noulResponse(0.99)));
   const params = input('x > 0', { x: 1 });
 
@@ -88,11 +80,11 @@ test('Jev uses its own API, model configuration and current source context witho
   assert.match(requests[0].body.questions.result.instructions, /<\/nl-judge>/);
 });
 
-test('Jev ignores invalid code generation round limits on its file global', async () => {
+test('Jev ignores invalid code generation round limits in the global configuration', async () => {
   respondWith(() => jsonResponse(noulResponse(0.99)));
   for (const maxRounds of [null, 0, 'invalid']) {
     const params = input('当前状态是否合法', { x: 1 });
-    params.global.maxRounds = maxRounds;
+    globalThis.__NLJS_GLOBAL.maxRounds = maxRounds;
     assert.equal(await generate(params), 'true');
   }
   assert.equal(requests.length, 3);
@@ -122,7 +114,7 @@ test('the marker identifies the current occurrence when identical nl conditions 
   const code = prefix + block + suffix;
 
   await generate({
-    global: { sourceCode: code },
+    module: { sourceCode: code },
     scope: { x: 1, first: true },
     source: { code, start: prefix.length, end: prefix.length + block.length },
   });
@@ -153,7 +145,7 @@ test('condition extraction ignores whitespace and comments before the template d
     const block = tag + '`x > 0`';
     const code = prefix + block + '; }';
     await generate({
-      global: { sourceCode: code },
+      module: { sourceCode: code },
       scope: { x: 1 },
       source: { code, start: prefix.length, end: prefix.length + block.length },
     });
@@ -176,11 +168,11 @@ test('Jev returns the model judgment and applies the threshold, including false 
     assert.equal(await eval(code), value);
   }
   assert.equal(requests.length, probabilities.length);
-  assert.equal(requests[0].body.model, 'jev-latest');
+  assert.equal(requests[0].body.model, 'test-jev-model');
 });
 
 test('a configured Jev threshold rejects 0.51 and includes exactly 0.8', async () => {
-  process.env.NLJS_JEV_THRESHOLD = '0.8';
+  globalThis.__NLJS_GLOBAL.jevThreshold = 0.8;
   const probabilities = [0, 0.51, 0.7999, 0.8, 0.81, 1];
   const expected = [false, false, false, true, true, true];
   respondWith(() => jsonResponse(noulResponse(probabilities[requests.length - 1])));
@@ -193,13 +185,13 @@ test('a configured Jev threshold rejects 0.51 and includes exactly 0.8', async (
 
 test('configured thresholds include the endpoints and an explicit 0.5', async () => {
   for (const [threshold, probability, expected] of [
-    ['0', 0, true],
-    ['1', 0.9999, false],
-    ['1', 1, true],
-    ['0.5', 0.5, true],
-    [' 0.8 ', 0.8, true],
+    [0, 0, true],
+    [1, 0.9999, false],
+    [1, 1, true],
+    [0.5, 0.5, true],
+    [0.8, 0.8, true],
   ]) {
-    process.env.NLJS_JEV_THRESHOLD = threshold;
+    globalThis.__NLJS_GLOBAL.jevThreshold = threshold;
     respondWith(() => jsonResponse(noulResponse(probability)));
     assert.equal(await generate(input()), String(expected));
   }
@@ -207,20 +199,20 @@ test('configured thresholds include the endpoints and an explicit 0.5', async ()
 
 test('Jev reads threshold changes on each judgment', async () => {
   respondWith(() => jsonResponse(noulResponse(0.8)));
-  process.env.NLJS_JEV_THRESHOLD = '0.9';
+  globalThis.__NLJS_GLOBAL.jevThreshold = 0.9;
   assert.equal(await generate(input()), 'false');
-  process.env.NLJS_JEV_THRESHOLD = '0.8';
+  globalThis.__NLJS_GLOBAL.jevThreshold = 0.8;
   assert.equal(await generate(input()), 'true');
-  delete process.env.NLJS_JEV_THRESHOLD;
+  delete globalThis.__NLJS_GLOBAL.jevThreshold;
   assert.equal(await generate(input()), 'true');
   assert.equal(requests.length, 3);
 });
 
 test('invalid Jev thresholds fail before any model request', async () => {
   respondWith(() => jsonResponse(noulResponse(1)));
-  for (const threshold of ['', '   ', 'abc', '0.8extra', '80%', 'NaN', 'Infinity', '-0.1', '1.1']) {
-    process.env.NLJS_JEV_THRESHOLD = threshold;
-    await assert.rejects(generate(input()), /Jev 判断失败: NLJS_JEV_THRESHOLD/);
+  for (const threshold of [null, NaN, Infinity, -Infinity, -0.1, 1.1, '', '   ', 'abc', '0.8', ' 0.8 ', '0.8extra', '80%', 'NaN', 'Infinity', '-0.1', '1.1', true, {}, []]) {
+    globalThis.__NLJS_GLOBAL.jevThreshold = threshold;
+    await assert.rejects(generate(input()), /Jev 判断失败: __NLJS_GLOBAL\.jevThreshold/);
   }
   assert.equal(requests.length, 0);
 });
@@ -234,11 +226,11 @@ test('the same source location is reevaluated when its scope changes', async () 
 });
 
 test('OpenAI stays the default and its cached code cannot bypass an explicit switch to Jev', async () => {
-  delete process.env.NLJS_PROVIDER;
-  process.env.NLJS_JEV_THRESHOLD = 'invalid-but-unused-by-openai';
-  process.env.OPENAI_API_KEY = 'test-openai-key';
-  process.env.OPENAI_BASE_URL = 'https://openai.example/v1';
-  process.env.OPENAI_MODEL = 'test-code-model';
+  delete globalThis.__NLJS_GLOBAL.provider;
+  globalThis.__NLJS_GLOBAL.jevThreshold = 'invalid-but-unused-by-openai';
+  globalThis.__NLJS_GLOBAL.apiKey = 'test-openai-key';
+  globalThis.__NLJS_GLOBAL.baseURL = 'https://openai.example/v1';
+  globalThis.__NLJS_GLOBAL.model = 'test-code-model';
   respondWith((request) => jsonResponse(request.url.endsWith('/systemone')
     ? noulResponse(0.01)
     : {
@@ -266,12 +258,12 @@ test('OpenAI stays the default and its cached code cannot bypass an explicit swi
   assert.equal(requests[0].url, 'https://openai.example/v1/chat/completions');
   assert.equal(requests[0].body.model, 'test-code-model');
 
-  process.env.NLJS_PROVIDER = 'jev';
-  process.env.NLJS_JEV_THRESHOLD = '0.8';
+  globalThis.__NLJS_GLOBAL.provider = 'jev';
+  globalThis.__NLJS_GLOBAL.jevThreshold = 0.8;
   assert.equal(await eval(await generate(params)), false);
   assert.equal(requests.length, 2);
 
-  process.env.NLJS_PROVIDER = 'openai';
+  globalThis.__NLJS_GLOBAL.provider = 'openai';
   assert.equal(await eval(await generate(params)), 42);
   assert.equal(requests.length, 2);
 });
@@ -290,9 +282,9 @@ test('missing, malformed or out-of-range Noul answers fail instead of becoming f
 });
 
 test('a missing TypeSafe key fails before any request', async () => {
-  delete process.env.TYPESAFE_API_KEY;
+  delete globalThis.__NLJS_GLOBAL.apiKey;
   respondWith(() => jsonResponse(noulResponse(1)));
-  await assert.rejects(generate(input()), /Jev 判断失败:.*TYPESAFE_API_KEY/);
+  await assert.rejects(generate(input()), /Jev 判断失败:.*__NLJS_GLOBAL\.apiKey/);
   assert.equal(requests.length, 0);
 });
 
@@ -307,8 +299,8 @@ test('authentication failures propagate with the SDK error as their cause', asyn
 });
 
 test('an unknown provider fails instead of silently selecting another model or cached code', async () => {
-  process.env.NLJS_PROVIDER = 'jevv';
+  globalThis.__NLJS_GLOBAL.provider = 'jevv';
   respondWith(() => jsonResponse(noulResponse(1)));
-  await assert.rejects(generate(input('return 42')), /不支持的 NLJS_PROVIDER: jevv/);
+  await assert.rejects(generate(input('return 42')), /不支持的 __NLJS_GLOBAL\.provider: jevv/);
   assert.equal(requests.length, 0);
 });
