@@ -18,34 +18,26 @@ main();
 
 `nljs` 最低支持 **Node.js 22.18.0**：可使用 22.x 的 22.18.0 及更新版本，或 Node.js 24 及更新主版本；不支持 Node.js 23.x。下面的命令使用 macOS / Linux 的 Bash 或 Zsh，已在 Node.js 22.18.0、24.18.0 环境验证。运行自然语言片段还需要模型服务的 API Key、接口地址和可用模型名称。
 
-### 1. 从源码打包并安装 CLI
+### 1. 安装 CLI
 
-当前 `@nljs/cli` 尚未发布到 npm，先从仓库生成 tarball，再安装：
+从 npm 安装后即可使用 `nljs` 命令：
 
 ```bash
-git clone https://github.com/XLCYun/nl.js.git
-cd nl.js/packages/cli
-npm ci
-npm pack
-npm install --global ./nljs-cli-0.0.1.tgz
-
+npm install --global @nljs/cli
 nljs --version
 ```
 
-`npm pack` 会自动构建，把本仓库的插件和运行时一起打进包。只需安装 `packages/cli` 的依赖，不需要分别安装 `packages/core` 或 `packages/babel`。生成的 tarball 可以复制到仓库之外安装；安装后 `nljs` 不依赖仓库目录。全局安装位置由 npm 配置决定，请确保其命令目录在 `PATH` 中。
+CLI 内置插件和运行时，不需要分别安装 `@nljs/core` 或 `@nljs/babel`。全局安装位置由 npm 配置决定，请确保其命令目录在 `PATH` 中。
 
-未来发布到 npm 后才可使用 `npx @nljs/cli hello.js`；现在请使用上面的 tarball 安装方式。
+也可以跳过全局安装，在准备好下方脚本与配置后直接运行：
+
+```bash
+npx --yes @nljs/cli hello.js "NL.js"
+```
 
 ### 2. 配置模型服务
 
-继续进入单脚本示例目录，复制配置模板：
-
-```bash
-cd ../../examples/cli
-cp config.example.cjs config.cjs
-```
-
-编辑 `config.cjs`，填入 API Key、接口地址和模型名称。运行时从真正共享的 `globalThis.__NLJS_GLOBAL` 对象读取配置：
+在脚本所在目录创建 `config.cjs`，填入 API Key、接口地址和模型名称，也可参考 [配置模板](examples/cli/config.example.cjs)。运行时从真正共享的 `globalThis.__NLJS_GLOBAL` 对象读取配置：
 
 ```js
 globalThis.__NLJS_GLOBAL = {
@@ -59,13 +51,13 @@ globalThis.__NLJS_GLOBAL = {
 };
 ```
 
-这个目录的 `config.cjs` 已被 Git 忽略，配置文件中不放 `nl` 片段。运行时不读取 `process.env`，也不会自动加载 `.env`；若要从环境或其他配置系统取值，由自己的配置代码显式赋给这个对象。
+配置文件中不放 `nl` 片段，也不要把真实 API Key 提交到版本库；本仓库的 `examples/cli/config.cjs` 已被 Git 忽略。运行时不读取 `process.env`，也不会自动加载 `.env`；若要从环境或其他配置系统取值，由自己的配置代码显式赋给这个对象。
 
 Base URL 应包含服务要求的 API 基础路径，例如 `/v1`，不要填写完整的 `/chat/completions` 路径。服务必须支持 `final_output` 工具调用，详细要求见下文「配置与调试」。
 
 ### 3. 直接运行 JS 脚本
 
-示例 [hello.js](examples/cli/hello.js) 不需要 `package.json`、Babel 配置，也不需要定义或导入 `nl`：
+将以下内容保存为 `hello.js`（也见 [仓库示例](examples/cli/hello.js)）。不需要 `package.json`、Babel 配置，也不需要定义或导入 `nl`：
 
 ```js
 require('./config.cjs');
@@ -125,9 +117,32 @@ await import('./sum.mjs');
 
 运行 `nljs bootstrap.mjs`。同一个配置文件可以供多个 CommonJS 或 ESM 模块使用。
 
+### 从源码打包 CLI
+
+开发者也可以从仓库构建和安装 tarball：
+
+```bash
+git clone https://github.com/XLCYun/nl.js.git
+cd nl.js/packages/cli
+npm ci
+npm pack
+npm install --global ./nljs-cli-0.0.1.tgz
+```
+
+`npm pack` 会自动构建并打入同一仓库的插件和运行时。只需安装 `packages/cli` 的依赖；tarball 可复制到仓库之外安装。
+
 ## Babel 集成方式
 
-已有项目可以继续通过 Babel 插件编译后执行。以下流程从仓库根目录开始；与 `nljs` 的自动转换方式二选一即可。
+已有项目可以通过 Babel 插件编译后执行。安装运行时和编译依赖：
+
+```bash
+npm install @nljs/core
+npm install --save-dev @nljs/babel @babel/core@7 @babel/cli@7
+```
+
+在 Babel 配置中使用 `"plugins": ["module:@nljs/babel"]`，完整的编译与执行示例见 [插件说明](packages/babel/README.md)。与 `nljs` 的自动转换方式二选一即可。
+
+以下流程用于运行仓库内的 Babel 示例，从仓库根目录开始。
 
 ### 1. 安装依赖
 

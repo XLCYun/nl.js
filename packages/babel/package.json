@@ -3,18 +3,21 @@
   "version": "0.0.1",
   "description": "Babel plugin for nl.js.",
   "main": "index.js",
+  "files": ["index.js", "helpers/"],
   "scripts": {
     "test": "jest"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/XLCYun/nl.js.git"
+    "url": "git+https://github.com/XLCYun/nl.js.git",
+    "directory": "packages/babel"
   },
   "keywords": [
     "nljs",
     "babel-plugin"
   ],
   "author": "XLCYun",
+  "license": "MIT",
   "peerDependencies": {
     "@babel/core": "^7.0.0"
   },
@@ -29,5 +32,8 @@
     "url": "https://github.com/XLCYun/nl.js/issues"
   },
   "homepage": "https://github.com/XLCYun/nl.js#readme",
-  "private": true
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
 }

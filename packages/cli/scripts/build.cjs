@@ -6,10 +6,10 @@ rmSync(destination, { recursive: true, force: true });
 mkdirSync(destination, { recursive: true });
 
 // Ship the repository's runtime and plugin sources with this package. Consumers
-// install the CLI's npm dependencies, never unpublished sibling packages.
+// install the CLI's npm dependencies without requiring sibling packages.
 const sources = {
-  core: ['index.js', 'cache.js', 'config.js', 'context.js', 'harness.js', 'jev.js', 'log.js'],
-  babel: ['index.js', 'helpers/checkProgramVar.js', 'helpers/gatherScopeVars.js'],
+  core: ['index.js', 'cache.js', 'config.js', 'context.js', 'harness.js', 'jev.js', 'log.js', 'LICENSE'],
+  babel: ['index.js', 'helpers/checkProgramVar.js', 'helpers/gatherScopeVars.js', 'LICENSE'],
 };
 const cliDependencies = require('../package.json').dependencies;
 for (const [name, files] of Object.entries(sources)) {
@@ -26,6 +26,7 @@ for (const [name, files] of Object.entries(sources)) {
     copyFileSync(path.join(source, file), path.join(target, file));
   }
   writeFileSync(path.join(target, 'package.json'), JSON.stringify({
-    name: metadata.name, version: metadata.version, type: 'commonjs', main: metadata.main,
+    name: metadata.name, version: metadata.version, license: metadata.license,
+    type: 'commonjs', main: metadata.main,
   }, null, 2) + '\n');
 }

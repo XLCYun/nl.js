@@ -3,23 +3,36 @@
   "version": "0.0.1",
   "description": "Core package of nljs",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "cache.js",
+    "config.js",
+    "context.js",
+    "harness.js",
+    "jev.js",
+    "log.js"
+  ],
   "scripts": {
     "test": "node --test"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/XLCYun/nl.js.git"
+    "url": "git+https://github.com/XLCYun/nl.js.git",
+    "directory": "packages/core"
   },
   "keywords": [
     "nljs"
   ],
   "author": "XLCYun",
-  "license": "SEE LICENSE IN license",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/XLCYun/nl.js/issues"
   },
   "homepage": "https://github.com/XLCYun/nl.js#readme",
-  "private": true,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
     "openai": "6.15.0"

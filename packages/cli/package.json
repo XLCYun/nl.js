@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "description": "Run JavaScript with nl fragments without configuring Babel",
   "type": "commonjs",
+  "author": "XLCYun",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/XLCYun/nl.js.git",
@@ -12,6 +14,12 @@
   "exports": {},
   "engines": { "node": "^22.18.0 || >=24.0.0" },
   "files": ["bin/", "register.cjs", "dist/"],
+  "homepage": "https://github.com/XLCYun/nl.js#readme",
+  "bugs": { "url": "https://github.com/XLCYun/nl.js/issues" },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "scripts": {
     "build": "node scripts/build.cjs",
     "prepack": "npm run build",
