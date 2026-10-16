@@ -51,7 +51,7 @@ nljs --help
 
 支持 `.js`、`.cjs`、`.mjs` 及本地模块导入。CommonJS 中的自然语言片段需放在 `async` 函数内；ESM 还支持顶层片段。第三方依赖仍安装在脚本所属项目中，`node_modules` 默认不转换。当前 CLI 不支持 TypeScript 或 JSX。
 
-更多配置、Jev 布尔判断及示例见 [NL.js 文档](https://github.com/XLCYun/nl.js#readme)。
+更多配置、Jev 布尔判断及示例见 [NL.js 使用指南](https://github.com/XLCYun/nl.js/blob/main/docs/guide.md)。
 
 ## 许可证
 

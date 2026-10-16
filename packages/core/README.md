@@ -27,7 +27,7 @@ globalThis.__NLJS_GLOBAL = {
 
 `apiKey`、`baseURL`、`model` 都是必填项。运行时不主动加载 `.env`，也不从 `process.env` 获取模型配置。默认的 OpenAI 路径需要支持工具调用的 Chat Completions 服务；设置 `provider: 'jev'` 可使用 TypeSafe Jev 做布尔判断。
 
-运行时返回代码字符串，由插件在片段的作用域内执行。通常无需直接调用 `generate`。完整配置约定、执行行为及示例见 [NL.js 文档](https://github.com/XLCYun/nl.js#readme)。
+运行时返回代码字符串，由插件在片段的作用域内执行。通常无需直接调用 `generate`。完整配置约定、执行行为及示例见 [NL.js 使用指南](https://github.com/XLCYun/nl.js/blob/main/docs/guide.md)。
 
 ## 许可证
 

@@ -14,7 +14,7 @@ Harness 只接管 OpenAI 代码生成会话。Jev 判断、代码缓存、函数
 
 ## 轮数配置
 
-轮数通过真正共享的 `globalThis.__NLJS_GLOBAL.maxRounds` 配置，运行时不读取环境变量。按 [README](../../README.md#配置与调试) 完成模型配置后，在自然语言片段执行之前调整：
+轮数通过真正共享的 `globalThis.__NLJS_GLOBAL.maxRounds` 配置，运行时不读取环境变量。按[使用指南](../guide.md#配置与调试)完成模型配置后，在自然语言片段执行之前调整：
 
 ```js
 globalThis.__NLJS_GLOBAL.maxRounds = 10;

@@ -65,7 +65,7 @@ node --require ./config.cjs compiled.cjs
 
 自然语言片段会插入 `await`，应放在 `async` 函数内；ESM 还支持模块顶层片段。配置中的 `validateAsyncContext: true` 可在编译阶段检查这一限制。模型请求发生在运行阶段。
 
-完整配置、Jev 布尔判断及示例见 [NL.js 文档](https://github.com/XLCYun/nl.js#readme)。
+完整配置、Jev 布尔判断及示例见 [NL.js 使用指南](https://github.com/XLCYun/nl.js/blob/main/docs/guide.md)。
 
 ## 许可证
 

@@ -35,7 +35,7 @@ npm start
 
 `npm start` 会先编译，再运行 `node -r dotenv/config -r ../configure.cjs lib/index.js`：dotenv 显式加载本目录的 `.env`，适配器设置共享配置；key、地址和模型都必须显式配置，遗漏会在请求前报错。终端已导出的同名变量优先。运行时本身不读取 `process.env` 或 `.env`。程序在发起判断前检查共享对象的 `provider` 必须为 `jev`。`.env` 已被 Git 忽略，提交时只保留 `.env.example`。
 
-也可以由自己的独立配置文件直接设置 `globalThis.__NLJS_GLOBAL`，参见根目录 [配置与调试](../../../README.md#配置与调试)。文件级 `__NLJS_MODULE` 保存源码上下文，不保存 provider 或 key。
+也可以由自己的独立配置文件直接设置 `globalThis.__NLJS_GLOBAL`，参见[配置与调试](../../../docs/guide.md#配置与调试)。文件级 `__NLJS_MODULE` 保存源码上下文，不保存 provider 或 key。
 
 ## 查看每次判断
 
