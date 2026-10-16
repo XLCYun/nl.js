@@ -312,7 +312,21 @@ Jev Noul 返回条件成立的概率。设置数值 `jevThreshold: 0.8` 后，�
 
 ## 示例
 
-单脚本 CLI 示例位于 [examples/cli](../examples/cli)，可按快速开始直接运行。下表列出的 Babel 示例位于 `examples/babel/`；运行一个新示例时，进入其目录安装依赖并填写 `.env`。例如，以下命令从仓库根目录运行：
+### CLI 示例
+
+Babel 目录中全部 9 个非 Jev 示例都有对应的 [CLI 版本](../examples/cli/README.md)，文件名与原示例目录同名，例如 `eightQueen.js`。它们共用 `examples/cli/config.cjs`，按快速开始填写配置后，在仓库根目录直接运行：
+
+```bash
+npx @nljs/cli examples/cli/helloWorld.js
+npx @nljs/cli examples/cli/eightQueen.js
+npx @nljs/cli examples/cli/computer.js "计算 123 加 456"
+```
+
+完整命令、交互方式和缓存设置见 [CLI 示例说明](../examples/cli/README.md)。原有的 `hello.js` 参数示例继续保留。
+
+### Babel 示例
+
+下表列出的 Babel 示例位于 `examples/babel/`；运行一个新示例时，进入其目录安装依赖并填写 `.env`。例如，以下命令从仓库根目录运行：
 
 ```bash
 cd examples/babel/eightQueen

@@ -68,7 +68,7 @@ __NLJS_CORE.disableCodeCache();
 npx @nljs/cli examples/cli/hello.js "NL.js"
 ```
 
-还可以探索[八皇后求解](examples/babel/eightQueen)、[自然语言计算器](examples/babel/computer)和 [Jev 布尔判断](examples/babel/jevBoolean)。这些示例的安装和运行方式见[示例指南](docs/guide.md#示例)。
+还可以直接运行[八皇后求解](examples/cli/eightQueen.js)、[自然语言计算器](examples/cli/computer.js)等 [CLI 示例](examples/cli/README.md)。[Jev 布尔判断](examples/babel/jevBoolean)的运行方式见[示例指南](docs/guide.md#示例)。
 
 ## 文档
 

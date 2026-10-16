@@ -1,0 +1,24 @@
+require('./config.cjs');
+
+async function main() {
+  // example:
+  // npx @nljs/cli examples/cli/nlarg.js ls list all file including hidden files
+  // the command should be "ls"
+  // the argsDescription should be "list all file including hidden files"
+  const command = nl`get the first argument from the command line`;
+  const argsDescription = nl`get all left arguments from the command line`;
+  const args = nl`base on the command and argsDescription, what args should be passed to the command, give me a string`;
+
+  nl`print the command and args`;
+  const confirmed = nl`confirm from user to run the command and args, return true if confirmed`;
+  if(confirmed === true) {
+    nl`run the command and args`;
+  }
+
+  return 0;
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
