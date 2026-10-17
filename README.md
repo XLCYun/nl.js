@@ -6,19 +6,6 @@ NL.js 是一种将代码与自然语言融合的编程实验。在 `nl` 模板�
 
 [npm](https://www.npmjs.com/package/@nljs/cli) · [使用指南](docs/guide.md) · [示例](docs/guide.md#示例)
 
-例如，用自然语言判断水仙花数（省略模型配置）：
-
-```javascript
-async function main() {
-  for (let n = 100; n < 1000; n++)
-    if (nl`判断 n 是否等于它各位数字的立方和，返回布尔值`)
-      console.log(n);
-}
-main();
-```
-
-完整脚本见[水仙花数示例](examples/cli/narcissisticNumbers.js)。
-
 ## 快速开始
 
 需要 **Node.js 22.x ≥22.18.0 或 24+**，以及兼容 OpenAI  Chat Completions 的大模型 API。
@@ -57,6 +44,18 @@ Hello, World
 ```
 
 CLI 内置插件和运行时，无需克隆仓库或单独安装其他 NL.js 包。经常使用时，也可以[全局安装](docs/guide.md#可选全局安装-nljs-命令)，之后直接运行 `nljs hello.js`。
+
+
+### 例子：寻找水仙花数
+
+```javascript
+async function main() {
+  for (let n = 100; n < 1000; n++)
+    if (nl`判断 n 是否等于它各位数字的立方和，返回布尔值`)
+      console.log(n);
+}
+main();
+```
 
 ## 代码缓存
 
