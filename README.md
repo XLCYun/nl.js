@@ -15,20 +15,19 @@ NL.js 是一种将代码与自然语言融合的编程实验。在 `nl` 模板�
 新建 `hello.js`，填好模型配置：
 
 ```js
+// 配置 LLM 接口
 globalThis.__NLJS_GLOBAL = {
   apiKey: 'your-api-key',
   baseURL: 'https://your-api-provider.example/v1',
   model: 'your-model-name',
 };
 
+// 插入自然语言块
 async function main() {
   nl`print 'Hello, World'`;
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main();
 ```
 ### 2. 运行
 
